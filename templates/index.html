@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>GalMoe 投票系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- 导航栏 -->
+        <div class="navbar">
+            <div class="nav-left">
+                <div class="logo">🌸 GalMoe</div>
+            </div>
+            <div class="nav-center">
+                <div v-for="stage in stages" 
+                    :key="stage"
+                    class="nav-item"
+                    :class="{ active: currentStage === stage }"
+                    @click="navigateTo(stage)">
+                    [[ stage ]]
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="theme-toggle" @click="toggleTheme">
+                    <i :class="['fa-solid', theme === 'light' ? 'fa-moon' : 'fa-sun']"></i>
+                </div>
+                <div v-if="loggedIn">
+                    欢迎您，<u>[[ userQQ ]]</u>！
+                    <button class="logout-btn" @click="logout">登出</button>
+                </div>
+                <div v-else>
+                    <button class="login-btn" @click="showLogin = true">登录</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 首页内容 -->
+        <div class="container" v-if="!showNominationPage">
+            <h1 class="main-title">GalMoe 角色人气投票</h1>
+            <div class="info-box">
+                <h2>当前阶段</h2>
+                <p>[[ dbStage ]]</p>  <!-- 显示数据库中获取的阶段 -->
+            </div>
+            <div class="info-box clickable" @click="showRules = true">
+                <h2>赛制查询</h2>
+                <p>点击查看完整赛制说明</p>
+            </div>
+            <div class="info-box clickable" @click="navigateTo('提名')">
+                <h2>前往投票</h2>
+                <p>点击进入当前阶段投票页面</p>
+            </div>
+        </div>
+
+        <!-- 提名页面 -->
+        <div v-if="showNominationPage" class="nomination-page">
+            <div class="info-box large-info-box">
+                <h2>角色搜索</h2>
+                <div class="search-box">
+                    <input v-model="searchKeyword" placeholder="搜索角色" @keyup.enter="searchCharacters">
+                    <!-- 给按钮增加外层容器，方便样式分隔 -->
+                    <div class="search-btn-wrap">
+                        <button @click="searchCharacters">搜索</button>
+                    </div>
+                </div>
+            </div>
+            <div class="info-box large-info-box">
+                <h2>现有提名角色</h2>
+                <!-- 调整：匹配char_data表的字段 -->
+                <div class="characters-list">
+                    <div v-for="(character, index) in characters" :key="index" class="character-card">
+                        <!-- 核心修改：增加图片空值兜底 + 加载失败兜底 -->
+                        <div class="character-img-wrap">
+                            <img 
+                                v-if="character.image_url" 
+                                :src="character.image_url" 
+                                alt="[[ character.name ]]" 
+                                class="character-img"
+                                @error="handleImageError(index)"
+                            >
+                            <div v-else class="character-img-placeholder">
+                                <i class="fa-solid fa-user-astronaut"></i>
+                                <p>暂无图片</p>
+                            </div>
+                        </div>
+                        <p>[[ character.name ]]</p>
+                        <p>[[ character.cn_name || '无中文名' ]]</p>
+                    </div>
+                </div>
+                <!-- 空状态提示 -->
+                <div v-if="characters.length === 0" class="no-characters">
+                    暂无提名角色，快去搜索并提名吧！
+                </div>
+            </div>
+        </div>
+
+        <!-- 赛制弹窗 -->
+        <div class="modal" v-if="showRules" @click.self="showRules = false">
+            <div class="modal-content">
+                <span class="close" @click="showRules = false">&times;</span>
+                <h2>赛制说明</h2>
+                <p>提名 → 预选赛 → 小组赛 → 淘汰赛 → 最终决赛<br>最终决出前三名角色。</p>
+            </div>
+        </div>
+
+        <!-- 登录弹窗 -->
+        <div class="modal" v-if="showLogin" @click.self="showLogin = false; loginError = ''">
+            <div class="modal-content">
+                <span class="close" @click="showLogin = false; loginError = ''">&times;</span>
+                <h2>QQ 登录</h2>
+                <input type="text" class="login-input" v-model="loginQQ" placeholder="请输入QQ号">
+                <button class="confirm-btn" @click="login">登录</button>
+                <div class="login-tip">请通过 @群bot 进行账号注册</div>
+                <div class="login-message" v-if="loginError">[[ loginError ]]</div>
+            </div>
+        </div>
+        
+        <!-- 搜索结果弹窗 -->
+        <div class="modal" v-if="showSearchResult" @click.self="showSearchResult = false">
+            <div class="modal-content search-result-modal">
+                <span class="close" @click="showSearchResult = false">&times;</span>
+                <h2>搜索结果</h2>
+                <div v-if="searchResults.length === 0" class="no-result">
+                    暂无匹配的角色
+                </div>
+                <div class="character-result-list" v-else>
+                    <div class="character-result-item" 
+                         v-for="(item, index) in searchResults" 
+                         :key="index"
+                         @click="openConfirmNominationModal(item)">
+                        <img :src="item.image" alt="[[ item.name ]]" class="result-avatar" @error="handleResultImageError(index)">
+                        <div class="result-info">
+                            <p class="result-name">[[ item.name ]]</p>
+                            <p class="result-cnname">[[ item.cn_name || '无中文名' ]]</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新增：确认提名弹窗 -->
+        <div class="modal" v-if="showConfirmNomination" @click.self="closeConfirmNominationModal">
+            <div class="modal-content confirm-nomination-modal">
+                <span class="close" @click="closeConfirmNominationModal">&times;</span>
+                <h2>确认提名</h2>
+                <div class="confirm-character-info">
+                    <img 
+                        v-if="selectedCharacter.image" 
+                        :src="selectedCharacter.image" 
+                        alt="[[ selectedCharacter.name ]]" 
+                        class="confirm-avatar"
+                        @error="handleConfirmImageError"
+                    >
+                    <div v-else class="character-img-placeholder confirm-placeholder">
+                        <i class="fa-solid fa-user-astronaut"></i>
+                        <p>暂无图片</p>
+                    </div>
+                    <div class="confirm-name-wrap">
+                        <p class="confirm-name">[[ selectedCharacter.name ]]</p>
+                        <p class="confirm-cnname">[[ selectedCharacter.cn_name || '无中文名' ]]</p>
+                    </div>
+                </div>
+                <p class="confirm-tip">是否确认提名此角色？</p>
+                <!-- 提名结果提示 -->
+                <div v-if="nominationMessage" :style="{ color: nominationSuccess ? 'green' : 'red' }">
+                    [[ nominationMessage ]]
+                </div>
+                <div class="confirm-btn-group">
+                    <button class="cancel-btn" @click="closeConfirmNominationModal">取消</button>
+                    <button class="submit-btn" @click="confirmNomination">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

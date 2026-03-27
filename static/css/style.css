@@ -1,0 +1,434 @@
+body {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    background: linear-gradient(135deg, #e0f2ff, #ffffff);
+    transition: 0.3s;
+    color: #1e293b;
+}
+
+body.dark {
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    color: #f1f5f9;
+}
+
+/* ================= 顶栏 ================= */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 40px;
+    background-color: #0f172a;
+    color: white;
+    height: 70px;
+    box-sizing: border-box;
+}
+
+.nav-item.active {
+    background: #f1f5f9;
+    color: #111827;
+}
+
+.logo {
+    font-size: 18px;
+    font-weight: bold;
+    color: #f1f5f9;
+}
+
+.nav-center {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+}
+
+.nav-item {
+    color: #cbd5e1;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: 0.2s;
+    font-size: 15px;
+}
+
+.nav-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.nav-item.active {
+    background: #f1f5f9;
+    color: #111827;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.nav-right u,
+.nav-right {
+    color: #f1f5f9;
+}
+
+.theme-toggle {
+    color: #f1f5f9;
+    cursor: pointer;
+    width: 24px;
+    text-align: center;
+}
+
+.login-btn,
+.logout-btn,
+.confirm-btn {
+    background: #3b82f6;
+    border: none;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* ================= 主体 ================= */
+.container {
+    text-align: center;
+    margin-top: 80px;
+}
+
+.main-title {
+    text-align: center;
+    font-size: 36px;
+    margin-bottom: 40px;
+}
+
+.info-box {
+    margin: 30px auto;
+    padding: 30px;
+    width: 360px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.85);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    transition: 0.3s;
+}
+
+body.dark .info-box {
+    background: rgba(255,255,255,0.08);
+}
+
+.clickable:hover {
+    transform: translateY(-6px);
+    cursor: pointer;
+}
+
+/* ================= 提名页面 ================= */
+.nomination-page {
+    margin-top: 20px;
+}
+
+.search-box {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px; /* 增加搜索框和按钮的间距 */
+}
+
+.search-box input {
+    padding: 10px;
+    width: 250px;
+    flex: 1; /* 让输入框自适应宽度 */
+}
+
+/* 搜索按钮外层容器，确保间距 */
+.search-btn-wrap {
+    flex-shrink: 0;
+}
+
+.search-box button {
+    padding: 10px 20px;
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.characters-list {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.character-card {
+    text-align: center;
+}
+
+/* 核心新增：图片容器 + 占位图样式 */
+.character-img-wrap {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.character-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top; /* 展示图片上部 */
+}
+
+/* 图片占位样式 */
+.character-img-placeholder {
+    width: 100%;
+    height: 100%;
+    background-color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+}
+
+body.dark .character-img-placeholder {
+    background-color: #1e293b;
+    color: #cbd5e1;
+}
+
+.character-img-placeholder i {
+    font-size: 40px;
+    margin-bottom: 8px;
+}
+
+.character-img-placeholder p {
+    font-size: 12px;
+    margin: 0;
+}
+
+/* 确认提名弹窗中的占位图适配 */
+.confirm-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 8px;
+}
+
+.confirm-placeholder i {
+    font-size: 30px;
+}
+
+/* ================= 提名页面 info-box ================= */
+.large-info-box {
+    width: 800px; /* 设置宽度更大 */
+    margin: 30px auto;
+}
+
+/* ================= 弹窗 ================= */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    color: #1e293b;
+    margin: 8% auto;
+    padding: 25px;
+    width: 380px;
+    border-radius: 14px;
+    position: relative;
+    text-align: center;
+}
+
+body.dark .modal-content {
+    background: #1e293b;
+    color: #f1f5f9;
+}
+
+.close {
+    position: absolute;
+    right: 15px;
+    top: 10px;
+    cursor: pointer;
+    font-size: 20px;
+}
+
+.login-input {
+    width: 200px;
+    padding: 6px;
+    margin: 15px auto;
+    display: block;
+}
+
+.login-tip {
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+.login-message {
+    color: red;
+    margin-top: 10px;
+}
+
+.search-result-modal {
+    width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.character-result-list {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.character-result-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.05);
+    gap: 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.character-result-item:hover {
+    background: rgba(0,0,0,0.08);
+}
+
+body.dark .character-result-item {
+    background: rgba(255,255,255,0.05);
+}
+
+body.dark .character-result-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.no-characters {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-size: 15px;
+}
+
+body.dark .no-characters {
+    color: #ccc;
+}
+
+.result-avatar {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    object-position: top; /* 展示图片上部 */
+    border-radius: 8px;
+}
+
+.result-info {
+    text-align: left;
+}
+
+.result-name {
+    font-weight: bold;
+    margin: 0 0 5px 0;
+    font-size: 16px;
+}
+
+.result-cnname {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.8;
+}
+
+.no-result {
+    margin-top: 20px;
+    color: #666;
+    font-size: 15px;
+}
+
+body.dark .no-result {
+    color: #ccc;
+}
+
+/* ================= 新增：确认提名弹窗样式 ================= */
+.confirm-nomination-modal {
+    width: 450px;
+}
+
+.confirm-character-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.confirm-avatar {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    object-position: top; /* 展示图片上部 */
+    border-radius: 8px;
+}
+
+.confirm-name-wrap {
+    text-align: left;
+}
+
+.confirm-name {
+    font-weight: bold;
+    font-size: 18px;
+    margin: 0 0 5px 0;
+}
+
+.confirm-cnname {
+    font-size: 14px;
+    opacity: 0.8;
+    margin: 0;
+}
+
+.confirm-tip {
+    margin: 20px 0;
+    font-size: 15px;
+}
+
+.confirm-btn-group {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.cancel-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #94a3b8;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cancel-btn:hover {
+    background: #64748b;
+}
+
+.submit-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #3b82f6;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.submit-btn:hover {
+    background: #2563eb;
+}
