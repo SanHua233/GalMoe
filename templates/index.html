@@ -126,10 +126,28 @@
                 </div>
             </div>
 
-            <!-- 排名选项卡（暂未实现） -->
-            <div v-if="preliminaryActiveTab === 'rank'" class="rank-placeholder">
-                <p>排名功能开发中，敬请期待...</p>
-            </div>
+            <!-- 排名选项卡 -->
+            <div v-if="preliminaryActiveTab === 'rank'" class="rank-container">
+                <div v-for="(char, idx) in rankedCharacters" :key="char.id" class="rank-item">
+                    <div class="rank-number">[[ idx + 1 ]]</div>
+                    <div class="rank-avatar">
+                        <img v-if="char.image_url" :src="char.image_url" @error="handlePrelimImageError(char.id)">
+                            <div v-else class="card-img-placeholder"><i class="fa-solid fa-user"></i></div>
+                        </div>
+                        <div class="rank-info">
+                            <div class="rank-name">[[ char.name ]]</div>
+                            <div class="rank-cnname">[[ char.cn_name || '' ]]</div>
+                        </div>
+                        <div class="rank-votes">[[ char.vote_count ]] 票</div>
+                    </div>
+                    <!-- 淘汰线 -->
+                    <div v-if="eliminationLineIndex >= 0" class="elimination-line">
+                        <hr class="dashed-line">
+                        <div class="elimination-text">以下角色将淘汰</div>
+                    </div>
+                    <!-- 显示淘汰线以下的角色（可选，上面已经全部列出，但淘汰线作为分隔） -->
+                    <!-- 注意：淘汰线只出现一次，位于第32名之后或最后一名之后 -->
+                </div>
         </div>
 
         <!-- 赛制弹窗 -->

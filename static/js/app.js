@@ -44,6 +44,19 @@ createApp({
     computed: {
         selectedCount() {
             return this.selectedCharacterIds.length;
+        },
+        rankedCharacters() {
+            return [...this.preliminaryCharacters].sort((a, b) => b.vote_count - a.vote_count);
+        },
+        // 淘汰线位置：第32名（索引31），如果不足32名则返回最后一个索引
+        eliminationLineIndex() {
+            const total = this.rankedCharacters.length;
+            if (total === 0) return -1;
+            if (total >= 32) {
+                return 31; // 第32名的索引
+            } else {
+                return total - 1; // 最后一名索引
+            }
         }
     },
     mounted() {

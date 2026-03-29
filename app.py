@@ -241,21 +241,17 @@ def get_preliminary_config():
 
 @app.route("/api/preliminary/characters", methods=["GET"])
 def get_preliminary_characters():
-    """获取所有角色及其当前得票数（用于预选赛投票页面）"""
+    """获取所有角色及其当前得票数（从 char_data.pre_votes_total 读取）"""
     conn = get_db()
     cursor = conn.cursor()
-    # 查询角色基本信息，并统计预选赛票数
     cursor.execute("""
-        SELECT c.id, c.name, c.cn_name, c.image_url, COALESCE(COUNT(pv.char_id), 0) as vote_count
-        FROM char_data c
-        LEFT JOIN pre_votes pv ON c.id = pv.char_id
-        GROUP BY c.id
-        ORDER BY c.id
+        SELECT id, name, cn_name, image_url, pre_votes_total as vote_count
+        FROM char_data
+        ORDER BY pre_votes_total DESC, id ASC
     """)
     characters = cursor.fetchall()
     cursor.close()
     conn.close()
-    # 将Decimal转为int
     for char in characters:
         char["vote_count"] = int(char["vote_count"])
     return jsonify({"characters": characters})
@@ -277,7 +273,6 @@ def get_user_preliminary_votes():
 
 @app.route("/api/preliminary/vote", methods=["POST"])
 def submit_preliminary_vote():
-    """提交预选赛投票"""
     if "user" not in session:
         return jsonify({"success": False, "message": "请先登录"}), 401
     user_qq = session["user"]
@@ -286,12 +281,12 @@ def submit_preliminary_vote():
     if not isinstance(vote_ids, list):
         return jsonify({"success": False, "message": "投票数据格式错误"}), 400
     
-    # 去重
     vote_ids = list(set(vote_ids))
     
-    # 获取最大票数配置
     conn = get_db()
     cursor = conn.cursor()
+    
+    # 获取最大票数配置
     cursor.execute("SELECT data_value FROM system_data WHERE data_name = %s", ('pre_votes_per_user',))
     config_row = cursor.fetchone()
     max_votes = int(config_row["data_value"]) if config_row else 20
@@ -304,7 +299,7 @@ def submit_preliminary_vote():
     if cursor.fetchone():
         return jsonify({"success": False, "message": "您已经投过票，不能重复提交"}), 400
     
-    # 检查所有角色ID是否存在
+    # 检查角色ID是否存在
     if vote_ids:
         placeholders = ','.join(['%s'] * len(vote_ids))
         cursor.execute(f"SELECT id FROM char_data WHERE id IN ({placeholders})", vote_ids)
@@ -313,17 +308,20 @@ def submit_preliminary_vote():
         if invalid_ids:
             return jsonify({"success": False, "message": f"存在无效角色ID: {invalid_ids}"}), 400
     else:
-        # 允许投0票？需求未明确，但一般不允许空票，这里可返回错误
         return jsonify({"success": False, "message": "请至少选择一个角色"}), 400
     
-    # 批量插入投票记录
     try:
+        # 插入投票记录
         insert_sql = "INSERT INTO pre_votes (user_qq, char_id) VALUES (%s, %s)"
         for char_id in vote_ids:
             cursor.execute(insert_sql, (user_qq, char_id))
+        
+        # 更新 char_data 中的冗余票数字段
+        update_sql = "UPDATE char_data SET pre_votes_total = pre_votes_total + 1 WHERE id = %s"
+        for char_id in vote_ids:
+            cursor.execute(update_sql, (char_id,))
+        
         conn.commit()
-        # 可选：更新char_data中的pre_votes_total冗余字段（如果有）
-        # 这里可以触发更新，但为了简单，可以后续用触发器或定时任务
         cursor.close()
         conn.close()
         return jsonify({"success": True, "message": "投票成功"})

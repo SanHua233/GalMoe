@@ -594,3 +594,89 @@ body.dark .card-votes {
     font-size: 20px;
     color: #64748b;
 }
+
+/* ================= 预选赛排名样式 ================= */
+.rank-container {
+    margin-top: 20px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.rank-item {
+    display: flex;
+    align-items: center;
+    background: white;
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: 0.2s;
+}
+
+body.dark .rank-item {
+    background: #1e293b;
+}
+
+.rank-number {
+    width: 50px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #3b82f6;
+}
+
+.rank-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-right: 15px;
+}
+
+.rank-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+}
+
+.rank-info {
+    flex: 1;
+}
+
+.rank-name {
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.rank-cnname {
+    font-size: 13px;
+    color: #64748b;
+}
+
+body.dark .rank-cnname {
+    color: #cbd5e1;
+}
+
+.rank-votes {
+    font-size: 18px;
+    font-weight: bold;
+    color: #eab308;
+}
+
+.elimination-line {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.dashed-line {
+    border: none;
+    border-top: 2px dashed #94a3b8;
+    margin: 10px 0;
+}
+
+.elimination-text {
+    color: #ef4444;
+    font-size: 14px;
+    font-weight: bold;
+}
