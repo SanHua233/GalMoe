@@ -129,16 +129,15 @@ body.dark .info-box {
     margin-bottom: 20px;
     display: flex;
     align-items: center;
-    gap: 15px; /* 增加搜索框和按钮的间距 */
+    gap: 15px;
 }
 
 .search-box input {
     padding: 10px;
     width: 250px;
-    flex: 1; /* 让输入框自适应宽度 */
+    flex: 1;
 }
 
-/* 搜索按钮外层容器，确保间距 */
 .search-btn-wrap {
     flex-shrink: 0;
 }
@@ -163,7 +162,6 @@ body.dark .info-box {
     text-align: center;
 }
 
-/* 核心新增：图片容器 + 占位图样式 */
 .character-img-wrap {
     width: 150px;
     height: 150px;
@@ -177,10 +175,9 @@ body.dark .info-box {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: top; /* 展示图片上部 */
+    object-position: top;
 }
 
-/* 图片占位样式 */
 .character-img-placeholder {
     width: 100%;
     height: 100%;
@@ -207,7 +204,6 @@ body.dark .character-img-placeholder {
     margin: 0;
 }
 
-/* 确认提名弹窗中的占位图适配 */
 .confirm-placeholder {
     width: 100px;
     height: 100px;
@@ -218,9 +214,8 @@ body.dark .character-img-placeholder {
     font-size: 30px;
 }
 
-/* ================= 提名页面 info-box ================= */
 .large-info-box {
-    width: 800px; /* 设置宽度更大 */
+    width: 800px;
     margin: 30px auto;
 }
 
@@ -327,7 +322,7 @@ body.dark .no-characters {
     width: 80px;
     height: 80px;
     object-fit: cover;
-    object-position: top; /* 展示图片上部 */
+    object-position: top;
     border-radius: 8px;
 }
 
@@ -357,7 +352,6 @@ body.dark .no-result {
     color: #ccc;
 }
 
-/* ================= 新增：确认提名弹窗样式 ================= */
 .confirm-nomination-modal {
     width: 450px;
 }
@@ -373,7 +367,7 @@ body.dark .no-result {
     width: 100px;
     height: 100px;
     object-fit: cover;
-    object-position: top; /* 展示图片上部 */
+    object-position: top;
     border-radius: 8px;
 }
 
@@ -431,4 +425,172 @@ body.dark .no-result {
 
 .submit-btn:hover {
     background: #2563eb;
+}
+
+/* ================= 预选赛页面 ================= */
+.preliminary-page {
+    max-width: 1200px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.preliminary-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.preliminary-tabs button {
+    padding: 10px 30px;
+    font-size: 18px;
+    border: none;
+    background: #e2e8f0;
+    cursor: pointer;
+    border-radius: 30px;
+    transition: 0.2s;
+}
+
+body.dark .preliminary-tabs button {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+.preliminary-tabs button.active {
+    background: #3b82f6;
+    color: white;
+}
+
+.vote-counter {
+    text-align: right;
+    font-size: 18px;
+    margin-bottom: 20px;
+    padding: 8px 16px;
+    background: #f8fafc;
+    border-radius: 40px;
+    display: inline-block;
+    float: right;
+}
+
+body.dark .vote-counter {
+    background: #1e293b;
+}
+
+.characters-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    clear: both;
+    margin-top: 20px;
+}
+
+.character-card-vote {
+    display: flex;
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+body.dark .character-card-vote {
+    background: #1e293b;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.character-card-vote.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    transform: scale(1.01);
+}
+
+body.dark .character-card-vote.selected {
+    background: #1e3a8a;
+    border-color: #60a5fa;
+}
+
+.card-left {
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+}
+
+.card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+}
+
+.card-img-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #64748b;
+}
+
+body.dark .card-img-placeholder {
+    background: #334155;
+    color: #94a3b8;
+}
+
+.card-right {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.card-name {
+    font-weight: bold;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.card-votes {
+    font-size: 14px;
+    color: #475569;
+}
+
+body.dark .card-votes {
+    color: #cbd5e1;
+}
+
+.vote-action {
+    text-align: center;
+    margin-top: 40px;
+}
+
+.vote-submit-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 12px 40px;
+    font-size: 18px;
+    border-radius: 40px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.vote-submit-btn:hover {
+    background: #2563eb;
+}
+
+.vote-submit-btn.disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+}
+
+.rank-placeholder {
+    text-align: center;
+    padding: 80px;
+    font-size: 20px;
+    color: #64748b;
 }

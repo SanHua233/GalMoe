@@ -27,12 +27,23 @@ createApp({
             showSearchResult: false,
             searchResults: [],
             searchError: "",
-            // 新增确认提名相关数据
             showConfirmNomination: false,
             selectedCharacter: {},
-            // 新增提名结果提示
             nominationMessage: "",
-            nominationSuccess: false
+            nominationSuccess: false,
+            // 预选赛相关数据
+            showPreliminaryPage: false,
+            preliminaryActiveTab: 'vote',
+            preliminaryCharacters: [],
+            selectedCharacterIds: [],
+            preVotesPerUser: 20,
+            hasUserVotedInPreliminary: false,
+            preliminarySubmitting: false
+        }
+    },
+    computed: {
+        selectedCount() {
+            return this.selectedCharacterIds.length;
         }
     },
     mounted() {
@@ -60,6 +71,10 @@ createApp({
                 this.userQQ = data.qq_number;
                 this.showLogin = false;
                 this.loginError = "";
+                // 如果当前在预选赛页面，刷新数据
+                if (this.showPreliminaryPage) {
+                    this.loadPreliminaryData();
+                }
             } else {
                 this.loginError = data.message;
             }
@@ -69,6 +84,12 @@ createApp({
             await fetch("/logout", { method: "POST" });
             this.loggedIn = false;
             this.userQQ = "";
+            // 如果当前在预选赛页面，重置状态
+            if (this.showPreliminaryPage) {
+                this.hasUserVotedInPreliminary = false;
+                this.selectedCharacterIds = [];
+                this.loadPreliminaryData();
+            }
         },
 
         async checkLogin() {
@@ -77,6 +98,12 @@ createApp({
             if (data.logged_in) {
                 this.loggedIn = true;
                 this.userQQ = data.qq_number;
+                if (this.showPreliminaryPage) {
+                    this.loadPreliminaryData();
+                }
+            } else {
+                this.loggedIn = false;
+                this.userQQ = "";
             }
         },
 
@@ -88,7 +115,6 @@ createApp({
             }
         },
 
-        // ========== 调整：获取角色列表（匹配新字段） ==========
         async fetchCharacters() {
             try {
                 const res = await fetch("/get_characters");
@@ -106,27 +132,147 @@ createApp({
         navigateTo(stage) {
             if (stage === '首页') {
                 this.showNominationPage = false;
+                this.showPreliminaryPage = false;
                 this.currentStage = '首页';
             } else if (stage === '提名') {
                 this.showNominationPage = true;
+                this.showPreliminaryPage = false;
                 this.currentStage = '提名';
-                // 切换到提名页时重新加载角色列表
                 this.fetchCharacters();
+            } else if (stage === '预选赛') {
+                this.showNominationPage = false;
+                this.showPreliminaryPage = true;
+                this.currentStage = '预选赛';
+                this.preliminaryActiveTab = 'vote';
+                this.loadPreliminaryData();
             }
         },
 
-        async searchCharacters() {
+        async loadPreliminaryData() {
+            try {
+                // 获取配置
+                const configRes = await fetch("/api/preliminary/config");
+                const configData = await configRes.json();
+                this.preVotesPerUser = configData.max_votes_per_user || 20;
+
+                // 获取角色列表及票数
+                const charsRes = await fetch("/api/preliminary/characters");
+                const charsData = await charsRes.json();
+                this.preliminaryCharacters = charsData.characters;
+
+                // 获取当前用户已投票列表
+                if (this.loggedIn) {
+                    const votesRes = await fetch("/api/preliminary/user_votes");
+                    if (votesRes.status === 401) {
+                        this.hasUserVotedInPreliminary = false;
+                        this.selectedCharacterIds = [];
+                    } else {
+                        const votesData = await votesRes.json();
+                        if (votesData.voted_ids) {
+                            this.hasUserVotedInPreliminary = votesData.voted_ids.length > 0;
+                            if (this.hasUserVotedInPreliminary) {
+                                this.selectedCharacterIds = [];
+                            } else {
+                                this.selectedCharacterIds = votesData.voted_ids;
+                            }
+                        } else {
+                            this.hasUserVotedInPreliminary = false;
+                            this.selectedCharacterIds = [];
+                        }
+                    }
+                } else {
+                    this.hasUserVotedInPreliminary = false;
+                    this.selectedCharacterIds = [];
+                }
+            } catch (error) {
+                console.error("加载预选赛数据失败:", error);
+            }
+        },
+
+        isCharacterSelected(charId) {
+            return this.selectedCharacterIds.includes(charId);
+        },
+
+        toggleSelectCharacter(charId) {
+            if (this.hasUserVotedInPreliminary) {
+                alert("您已完成投票，无法修改");
+                return;
+            }
+            if (!this.loggedIn) {
+                alert("请先登录后再进行投票");
+                this.showLogin = true;
+                return;
+            }
+            const index = this.selectedCharacterIds.indexOf(charId);
+            if (index === -1) {
+                if (this.selectedCharacterIds.length >= this.preVotesPerUser) {
+                    alert(`您最多只能投${this.preVotesPerUser}票，已达到上限`);
+                    return;
+                }
+                this.selectedCharacterIds.push(charId);
+            } else {
+                this.selectedCharacterIds.splice(index, 1);
+            }
+        },
+
+        async submitPreliminaryVote() {
+            if (!this.loggedIn) {
+                alert("请先登录");
+                this.showLogin = true;
+                return;
+            }
+            if (this.hasUserVotedInPreliminary) {
+                alert("您已经投过票，不能重复提交");
+                return;
+            }
+            if (this.selectedCharacterIds.length === 0) {
+                alert("请至少选择一个角色");
+                return;
+            }
+            if (this.selectedCharacterIds.length > this.preVotesPerUser) {
+                alert(`最多只能投${this.preVotesPerUser}票`);
+                return;
+            }
+            this.preliminarySubmitting = true;
+            try {
+                const res = await fetch("/api/preliminary/vote", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ vote_ids: this.selectedCharacterIds })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("投票成功！");
+                    this.hasUserVotedInPreliminary = true;
+                    await this.loadPreliminaryData();
+                } else {
+                    alert("投票失败：" + data.message);
+                }
+            } catch (error) {
+                console.error("提交投票出错:", error);
+                alert("网络错误，请稍后重试");
+            } finally {
+                this.preliminarySubmitting = false;
+            }
+        },
+
+        handlePrelimImageError(charId) {
+            const char = this.preliminaryCharacters.find(c => c.id === charId);
+            if (char) char.image_url = "";
+        },
+
+        searchCharacters() {
             if (!this.searchKeyword.trim()) {
                 this.searchError = "请输入搜索关键词";
                 return;
             }
-            try {
-                const res = await fetch("/api/search_character", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ keyword: this.searchKeyword.trim() })
-                });
-                const data = await res.json();
+            fetch("/api/search_character", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ keyword: this.searchKeyword.trim() })
+            })
+            .then(res => res.json())
+            .then(data => {
                 if (data.success) {
                     this.searchResults = data.characters;
                     this.searchError = "";
@@ -135,44 +281,37 @@ createApp({
                     this.searchError = data.message;
                     this.searchResults = [];
                 }
-            } catch (e) {
+            })
+            .catch(e => {
                 this.searchError = "网络错误，搜索失败";
                 this.searchResults = [];
-            }
+            });
         },
 
-        // 新增：打开确认提名弹窗
         openConfirmNominationModal(character) {
             this.selectedCharacter = character;
             this.showConfirmNomination = true;
-            // 清空之前的提名提示
             this.nominationMessage = "";
             this.nominationSuccess = false;
         },
 
-        // 新增：关闭确认提名弹窗（仅关闭当前弹窗）
         closeConfirmNominationModal() {
             this.showConfirmNomination = false;
             this.selectedCharacter = {};
         },
 
-        // ========== 核心新增：调用提名接口 ==========
         async confirmNomination() {
-            // 验证登录状态
             if (!this.loggedIn) {
                 alert("请先登录后再进行提名");
                 this.showConfirmNomination = false;
                 this.showLogin = true;
                 return;
             }
-
-            // 构造提名数据（匹配数据库字段）
             const nominationData = {
                 name: this.selectedCharacter.name || "",
                 cn_name: this.selectedCharacter.cn_name || "无中文名",
                 image: this.selectedCharacter.image || ""
             };
-
             try {
                 const res = await fetch("/api/nominate_character", {
                     method: "POST",
@@ -183,10 +322,8 @@ createApp({
                 if (data.success) {
                     this.nominationMessage = data.message;
                     this.nominationSuccess = true;
-                    // 关闭弹窗 + 刷新角色列表
                     this.closeConfirmNominationModal();
                     this.fetchCharacters();
-                    // 提示成功
                     alert(data.message);
                 } else {
                     this.nominationMessage = data.message;
@@ -200,9 +337,7 @@ createApp({
             }
         },
 
-        // 新增：图片加载失败处理
         handleImageError(index) {
-            // 将失败的图片URL置空，触发占位图显示
             this.characters[index].image_url = "";
         },
         handleResultImageError(index) {

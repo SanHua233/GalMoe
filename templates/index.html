@@ -5,7 +5,7 @@
     <title>GalMoe 投票系统</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{! url_for('static', filename='css/style.css') !}">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
 <body>
@@ -39,11 +39,11 @@
         </div>
 
         <!-- 首页内容 -->
-        <div class="container" v-if="!showNominationPage">
+        <div class="container" v-if="!showNominationPage && !showPreliminaryPage">
             <h1 class="main-title">GalMoe 角色人气投票</h1>
             <div class="info-box">
                 <h2>当前阶段</h2>
-                <p>[[ dbStage ]]</p>  <!-- 显示数据库中获取的阶段 -->
+                <p>[[ dbStage ]]</p>
             </div>
             <div class="info-box clickable" @click="showRules = true">
                 <h2>赛制查询</h2>
@@ -61,7 +61,6 @@
                 <h2>角色搜索</h2>
                 <div class="search-box">
                     <input v-model="searchKeyword" placeholder="搜索角色" @keyup.enter="searchCharacters">
-                    <!-- 给按钮增加外层容器，方便样式分隔 -->
                     <div class="search-btn-wrap">
                         <button @click="searchCharacters">搜索</button>
                     </div>
@@ -69,10 +68,8 @@
             </div>
             <div class="info-box large-info-box">
                 <h2>现有提名角色</h2>
-                <!-- 调整：匹配char_data表的字段 -->
                 <div class="characters-list">
                     <div v-for="(character, index) in characters" :key="index" class="character-card">
-                        <!-- 核心修改：增加图片空值兜底 + 加载失败兜底 -->
                         <div class="character-img-wrap">
                             <img 
                                 v-if="character.image_url" 
@@ -90,10 +87,48 @@
                         <p>[[ character.cn_name || '无中文名' ]]</p>
                     </div>
                 </div>
-                <!-- 空状态提示 -->
                 <div v-if="characters.length === 0" class="no-characters">
                     暂无提名角色，快去搜索并提名吧！
                 </div>
+            </div>
+        </div>
+
+        <!-- 预选赛页面 -->
+        <div v-if="showPreliminaryPage" class="preliminary-page">
+            <div class="preliminary-tabs">
+                <button :class="{ active: preliminaryActiveTab === 'vote' }" @click="preliminaryActiveTab = 'vote'">投票</button>
+                <button :class="{ active: preliminaryActiveTab === 'rank' }" @click="preliminaryActiveTab = 'rank'">排名</button>
+            </div>
+
+            <!-- 投票选项卡 -->
+            <div v-if="preliminaryActiveTab === 'vote'">
+                <div class="vote-counter">
+                    已选：[[ selectedCount ]] / [[ preVotesPerUser ]]
+                </div>
+                <div class="characters-grid">
+                    <div v-for="char in preliminaryCharacters" :key="char.id" 
+                         class="character-card-vote"
+                         :class="{ selected: isCharacterSelected(char.id) }"
+                         @click="toggleSelectCharacter(char.id)">
+                        <div class="card-left">
+                            <img v-if="char.image_url" :src="char.image_url" class="card-img" @error="handlePrelimImageError(char.id)">
+                            <div v-else class="card-img-placeholder"><i class="fa-solid fa-user"></i></div>
+                        </div>
+                        <div class="card-right">
+                            <div class="card-name">[[ char.name ]]</div>
+                            <div class="card-votes">票数：[[ char.vote_count ]]</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="vote-action">
+                    <button v-if="!hasUserVotedInPreliminary" class="vote-submit-btn" @click="submitPreliminaryVote" :disabled="preliminarySubmitting">提交投票</button>
+                    <button v-else class="vote-submit-btn disabled" disabled>您已完成投票，请勿重复提交</button>
+                </div>
+            </div>
+
+            <!-- 排名选项卡（暂未实现） -->
+            <div v-if="preliminaryActiveTab === 'rank'" class="rank-placeholder">
+                <p>排名功能开发中，敬请期待...</p>
             </div>
         </div>
 
@@ -141,7 +176,7 @@
             </div>
         </div>
 
-        <!-- 新增：确认提名弹窗 -->
+        <!-- 确认提名弹窗 -->
         <div class="modal" v-if="showConfirmNomination" @click.self="closeConfirmNominationModal">
             <div class="modal-content confirm-nomination-modal">
                 <span class="close" @click="closeConfirmNominationModal">&times;</span>
@@ -164,7 +199,6 @@
                     </div>
                 </div>
                 <p class="confirm-tip">是否确认提名此角色？</p>
-                <!-- 提名结果提示 -->
                 <div v-if="nominationMessage" :style="{ color: nominationSuccess ? 'green' : 'red' }">
                     [[ nominationMessage ]]
                 </div>
@@ -176,6 +210,6 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{! url_for('static', filename='js/app.js') !}"></script>
 </body>
 </html>

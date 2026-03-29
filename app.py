@@ -7,6 +7,10 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config["SECRET_KEY"]
 
+# 修改 Jinja2 定界符，避免与 Vue 冲突
+app.jinja_env.variable_start_string = '{!'
+app.jinja_env.variable_end_string = '!}'
+
 BANGUMI_API_BASE = app.config.get("BANGUMI_API_BASE", "https://api.bgm.tv").rstrip("/")
 BANGUMI_API_TOKEN = app.config.get("BANGUMI_API_TOKEN", "")
 
@@ -223,6 +227,112 @@ def update_current_stage():
         return jsonify({"success": True})
     return jsonify({"error": "Missing 'cur_stage' data"}), 400
 
+@app.route("/api/preliminary/config", methods=["GET"])
+def get_preliminary_config():
+    """获取预选赛配置（每人最大票数）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT data_value FROM system_data WHERE data_name = %s", ('pre_votes_per_user',))
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    max_votes = int(result["data_value"]) if result else 20
+    return jsonify({"max_votes_per_user": max_votes})
+
+@app.route("/api/preliminary/characters", methods=["GET"])
+def get_preliminary_characters():
+    """获取所有角色及其当前得票数（用于预选赛投票页面）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    # 查询角色基本信息，并统计预选赛票数
+    cursor.execute("""
+        SELECT c.id, c.name, c.cn_name, c.image_url, COALESCE(COUNT(pv.char_id), 0) as vote_count
+        FROM char_data c
+        LEFT JOIN pre_votes pv ON c.id = pv.char_id
+        GROUP BY c.id
+        ORDER BY c.id
+    """)
+    characters = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    # 将Decimal转为int
+    for char in characters:
+        char["vote_count"] = int(char["vote_count"])
+    return jsonify({"characters": characters})
+
+@app.route("/api/preliminary/user_votes", methods=["GET"])
+def get_user_preliminary_votes():
+    """获取当前登录用户已经投了哪些角色（返回角色ID列表）"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "未登录"}), 401
+    user_qq = session["user"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT char_id FROM pre_votes WHERE user_qq = %s", (user_qq,))
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    voted_ids = [row["char_id"] for row in rows]
+    return jsonify({"voted_ids": voted_ids})
+
+@app.route("/api/preliminary/vote", methods=["POST"])
+def submit_preliminary_vote():
+    """提交预选赛投票"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "请先登录"}), 401
+    user_qq = session["user"]
+    data = request.json
+    vote_ids = data.get("vote_ids", [])
+    if not isinstance(vote_ids, list):
+        return jsonify({"success": False, "message": "投票数据格式错误"}), 400
+    
+    # 去重
+    vote_ids = list(set(vote_ids))
+    
+    # 获取最大票数配置
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT data_value FROM system_data WHERE data_name = %s", ('pre_votes_per_user',))
+    config_row = cursor.fetchone()
+    max_votes = int(config_row["data_value"]) if config_row else 20
+    
+    if len(vote_ids) > max_votes:
+        return jsonify({"success": False, "message": f"最多只能投{max_votes}票"}), 400
+    
+    # 检查是否已经投过票
+    cursor.execute("SELECT 1 FROM pre_votes WHERE user_qq = %s LIMIT 1", (user_qq,))
+    if cursor.fetchone():
+        return jsonify({"success": False, "message": "您已经投过票，不能重复提交"}), 400
+    
+    # 检查所有角色ID是否存在
+    if vote_ids:
+        placeholders = ','.join(['%s'] * len(vote_ids))
+        cursor.execute(f"SELECT id FROM char_data WHERE id IN ({placeholders})", vote_ids)
+        existing_ids = {row["id"] for row in cursor.fetchall()}
+        invalid_ids = set(vote_ids) - existing_ids
+        if invalid_ids:
+            return jsonify({"success": False, "message": f"存在无效角色ID: {invalid_ids}"}), 400
+    else:
+        # 允许投0票？需求未明确，但一般不允许空票，这里可返回错误
+        return jsonify({"success": False, "message": "请至少选择一个角色"}), 400
+    
+    # 批量插入投票记录
+    try:
+        insert_sql = "INSERT INTO pre_votes (user_qq, char_id) VALUES (%s, %s)"
+        for char_id in vote_ids:
+            cursor.execute(insert_sql, (user_qq, char_id))
+        conn.commit()
+        # 可选：更新char_data中的pre_votes_total冗余字段（如果有）
+        # 这里可以触发更新，但为了简单，可以后续用触发器或定时任务
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "投票成功"})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        app.logger.error(f"提交投票失败: {str(e)}")
+        return jsonify({"success": False, "message": f"投票失败: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
