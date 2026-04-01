@@ -16,6 +16,7 @@ createApp({
             deleteResult: '',
             groupsPreview: null,
             generatingPreview: false,
+            clearingGroup: false,
         }
     },
     mounted() {
@@ -151,6 +152,26 @@ createApp({
                 }
             } catch (e) {
                 alert('请求失败');
+            }
+        },
+        async clearGroupData() {
+            if (!confirm('该操作将清空所有小组赛数据（包括比赛、积分和投票记录），是否继续？')) return;
+            this.clearingGroup = true;
+            try {
+                const res = await fetch('/api/admin/clear_group_data', {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    this.groupsPreview = null; // 清空预览
+                } else {
+                    alert('清空失败：' + data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.clearingGroup = false;
             }
         }
     }

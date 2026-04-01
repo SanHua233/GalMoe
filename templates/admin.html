@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <title>GalMoe 管理员后台</title>
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="{! url_for('static', filename='css/admin.css') !}">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
+
 <body>
     <div id="app">
         <div class="admin-container">
@@ -36,7 +38,8 @@
                     <h2>删除用户投票</h2>
                     <div class="form-row">
                         <input v-model="deleteUserQQ" placeholder="用户QQ号" class="admin-input">
-                        <button @click="deleteUserVotes" class="admin-btn danger" :disabled="deleting">删除用户预选赛投票</button>
+                        <button @click="deleteUserVotes" class="admin-btn danger"
+                            :disabled="deleting">删除用户预选赛投票</button>
                     </div>
                     <p class="info" v-if="deleteResult">[[ deleteResult ]]</p>
                 </div>
@@ -44,7 +47,12 @@
                 <!-- 一键分组 -->
                 <div class="card">
                     <h2>一键分组（生成小组赛）</h2>
-                    <button @click="generateGroupsPreview" class="admin-btn" :disabled="generatingPreview">生成分组预览</button>
+                    <div class="form-row">
+                        <button @click="generateGroupsPreview" class="admin-btn"
+                            :disabled="generatingPreview">生成分组预览</button>
+                        <button @click="clearGroupData" class="admin-btn danger"
+                            :disabled="clearingGroup">清空分组信息</button>
+                    </div>
                     <div v-if="groupsPreview" class="groups-preview">
                         <h3>分组预览</h3>
                         <div v-for="(group, name) in groupsPreview" :key="name" class="group-box">
@@ -67,4 +75,5 @@
     </div>
     <script src="{! url_for('static', filename='js/admin.js') !}"></script>
 </body>
+
 </html>

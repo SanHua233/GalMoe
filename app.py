@@ -528,5 +528,32 @@ def confirm_groups():
         app.logger.error(f"生成小组赛分组失败: {str(e)}")
         return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
 
+@app.route('/api/admin/clear_group_data', methods=['POST'])
+@admin_required
+def clear_group_data():
+    """清空小组赛数据（比赛、积分、投票记录）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 删除小组赛的投票记录
+        cursor.execute("""
+            DELETE FROM match_votes 
+            WHERE match_id IN (SELECT id FROM (SELECT id FROM matches WHERE stage_name = '小组赛') AS tmp)
+        """)
+        # 删除小组赛比赛
+        cursor.execute("DELETE FROM matches WHERE stage_name = '小组赛'")
+        # 删除小组积分数据
+        cursor.execute("DELETE FROM group_standings")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "message": "小组赛数据已清空"})
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        app.logger.error(f"清空小组赛数据失败: {str(e)}")
+        return jsonify({"success": False, "message": f"清空失败: {str(e)}"}), 500
+
 if __name__ == "__main__":
     app.run(debug=True)
