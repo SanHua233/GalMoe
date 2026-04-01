@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>GalMoe 管理员后台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{! url_for('static', filename='css/admin.css') !}">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="admin-container">
+            <h1>GalMoe 管理员后台</h1>
+            <div v-if="!loggedIn" class="login-section">
+                <h2>管理员登录</h2>
+                <input v-model="loginQQ" placeholder="QQ号" class="admin-input">
+                <button @click="adminLogin" class="admin-btn">登录</button>
+                <p class="error" v-if="loginError">[[ loginError ]]</p>
+            </div>
+            <div v-else>
+                <!-- 流程设定 -->
+                <div class="card">
+                    <h2>流程设定</h2>
+                    <div class="form-row">
+                        <select v-model="selectedStage" class="admin-select">
+                            <option v-for="s in stageOptions" :value="s">[[ s ]]</option>
+                        </select>
+                        <button @click="updateStage" class="admin-btn" :disabled="updatingStage">更改</button>
+                    </div>
+                    <p class="info">当前阶段：[[ currentStage ]]</p>
+                </div>
+
+                <!-- 删除用户投票 -->
+                <div class="card">
+                    <h2>删除用户投票</h2>
+                    <div class="form-row">
+                        <input v-model="deleteUserQQ" placeholder="用户QQ号" class="admin-input">
+                        <button @click="deleteUserVotes" class="admin-btn danger" :disabled="deleting">删除用户预选赛投票</button>
+                    </div>
+                    <p class="info" v-if="deleteResult">[[ deleteResult ]]</p>
+                </div>
+
+                <!-- 一键分组 -->
+                <div class="card">
+                    <h2>一键分组（生成小组赛）</h2>
+                    <button @click="generateGroupsPreview" class="admin-btn" :disabled="generatingPreview">生成分组预览</button>
+                    <div v-if="groupsPreview" class="groups-preview">
+                        <h3>分组预览</h3>
+                        <div v-for="(group, name) in groupsPreview" :key="name" class="group-box">
+                            <div class="group-title">[[ name ]]组</div>
+                            <div class="group-members">
+                                <div v-for="char in group" :key="char.id" class="group-member">
+                                    <span class="member-name">[[ char.name ]]</span>
+                                    <span class="member-votes">([[ char.vote_count ]]票)</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="preview-buttons">
+                            <button @click="cancelPreview" class="admin-btn cancel">取消</button>
+                            <button @click="confirmGroups" class="admin-btn success">确认分组</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{! url_for('static', filename='js/admin.js') !}"></script>
+</body>
+</html>

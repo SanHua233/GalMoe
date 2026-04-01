@@ -1,0 +1,129 @@
+body {
+    background: #f1f5f9;
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 20px;
+}
+.admin-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+h1 {
+    margin-top: 0;
+    color: #1e293b;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 10px;
+}
+.card {
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.card h2 {
+    margin-top: 0;
+    font-size: 1.4rem;
+    color: #0f172a;
+}
+.form-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.admin-input, .admin-select {
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+.admin-select {
+    min-width: 200px;
+}
+.admin-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+.admin-btn:hover:not(:disabled) {
+    background: #2563eb;
+}
+.admin-btn.danger {
+    background: #ef4444;
+}
+.admin-btn.danger:hover:not(:disabled) {
+    background: #dc2626;
+}
+.admin-btn.success {
+    background: #10b981;
+}
+.admin-btn.success:hover:not(:disabled) {
+    background: #059669;
+}
+.admin-btn.cancel {
+    background: #64748b;
+}
+.admin-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.info {
+    margin-top: 10px;
+    color: #475569;
+    font-size: 0.9rem;
+}
+.error {
+    color: #ef4444;
+}
+.groups-preview {
+    margin-top: 20px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 20px;
+}
+.group-box {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.group-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+    color: #1e40af;
+}
+.group-members {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+.group-member {
+    background: #eef2ff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+.member-name {
+    font-weight: 500;
+}
+.member-votes {
+    color: #64748b;
+    font-size: 0.8rem;
+}
+.preview-buttons {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
