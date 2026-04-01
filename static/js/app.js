@@ -48,7 +48,6 @@ createApp({
         rankedCharacters() {
             return [...this.preliminaryCharacters].sort((a, b) => b.vote_count - a.vote_count);
         },
-        // 淘汰线位置：第32名（索引31），如果不足32名则返回最后一个索引
         eliminationLineIndex() {
             const total = this.rankedCharacters.length;
             if (total === 0) return -1;
@@ -72,6 +71,17 @@ createApp({
             document.body.classList.add(this.theme);
         },
 
+        goToCurrentStage() {
+            if (this.dbStage === '提名阶段') {
+                this.navigateTo('提名');
+            } else if (this.dbStage === '预选赛阶段') {
+                this.navigateTo('预选赛');
+            } else {
+                alert('未开放阶段，请等待后台更新');
+            }
+        },
+
+
         async login() {
             const res = await fetch("/login", {
                 method: "POST",
@@ -84,7 +94,6 @@ createApp({
                 this.userQQ = data.qq_number;
                 this.showLogin = false;
                 this.loginError = "";
-                // 如果当前在预选赛页面，刷新数据
                 if (this.showPreliminaryPage) {
                     this.loadPreliminaryData();
                 }
@@ -97,7 +106,6 @@ createApp({
             await fetch("/logout", { method: "POST" });
             this.loggedIn = false;
             this.userQQ = "";
-            // 如果当前在预选赛页面，重置状态
             if (this.showPreliminaryPage) {
                 this.hasUserVotedInPreliminary = false;
                 this.selectedCharacterIds = [];
@@ -143,37 +151,37 @@ createApp({
         },
 
         navigateTo(stage) {
-            if (stage === '首页') {
-                this.showNominationPage = false;
-                this.showPreliminaryPage = false;
-                this.currentStage = '首页';
-            } else if (stage === '提名') {
-                this.showNominationPage = true;
-                this.showPreliminaryPage = false;
-                this.currentStage = '提名';
-                this.fetchCharacters();
-            } else if (stage === '预选赛') {
-                this.showNominationPage = false;
-                this.showPreliminaryPage = true;
-                this.currentStage = '预选赛';
-                this.preliminaryActiveTab = 'vote';
-                this.loadPreliminaryData();
-            }
+            // 先刷新阶段信息（异步）
+            this.fetchCurrentStage().then(() => {
+                if (stage === '首页') {
+                    this.showNominationPage = false;
+                    this.showPreliminaryPage = false;
+                    this.currentStage = '首页';
+                } else if (stage === '提名') {
+                    this.showNominationPage = true;
+                    this.showPreliminaryPage = false;
+                    this.currentStage = '提名';
+                    this.fetchCharacters();
+                } else if (stage === '预选赛') {
+                    this.showNominationPage = false;
+                    this.showPreliminaryPage = true;
+                    this.currentStage = '预选赛';
+                    this.preliminaryActiveTab = 'vote';
+                    this.loadPreliminaryData();
+                }
+            });
         },
 
         async loadPreliminaryData() {
             try {
-                // 获取配置
                 const configRes = await fetch("/api/preliminary/config");
                 const configData = await configRes.json();
                 this.preVotesPerUser = configData.max_votes_per_user || 20;
 
-                // 获取角色列表及票数
                 const charsRes = await fetch("/api/preliminary/characters");
                 const charsData = await charsRes.json();
                 this.preliminaryCharacters = charsData.characters;
 
-                // 获取当前用户已投票列表
                 if (this.loggedIn) {
                     const votesRes = await fetch("/api/preliminary/user_votes");
                     if (votesRes.status === 401) {
@@ -207,6 +215,11 @@ createApp({
         },
 
         toggleSelectCharacter(charId) {
+            // 阶段检测
+            if (this.dbStage !== '预选赛阶段') {
+                alert('当前不在预选赛阶段，无法投票');
+                return;
+            }
             if (this.hasUserVotedInPreliminary) {
                 alert("您已完成投票，无法修改");
                 return;
@@ -229,6 +242,11 @@ createApp({
         },
 
         async submitPreliminaryVote() {
+            // 阶段检测
+            if (this.dbStage !== '预选赛阶段') {
+                alert('当前不在预选赛阶段，无法投票');
+                return;
+            }
             if (!this.loggedIn) {
                 alert("请先登录");
                 this.showLogin = true;
@@ -274,18 +292,23 @@ createApp({
             if (char) char.image_url = "";
         },
 
-        searchCharacters() {
+        async searchCharacters() {
+            // 阶段检测
+            if (this.dbStage !== '提名阶段') {
+                alert('当前不在提名阶段，无法搜索');
+                return;
+            }
             if (!this.searchKeyword.trim()) {
                 this.searchError = "请输入搜索关键词";
                 return;
             }
-            fetch("/api/search_character", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ keyword: this.searchKeyword.trim() })
-            })
-            .then(res => res.json())
-            .then(data => {
+            try {
+                const res = await fetch("/api/search_character", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ keyword: this.searchKeyword.trim() })
+                });
+                const data = await res.json();
                 if (data.success) {
                     this.searchResults = data.characters;
                     this.searchError = "";
@@ -294,11 +317,10 @@ createApp({
                     this.searchError = data.message;
                     this.searchResults = [];
                 }
-            })
-            .catch(e => {
+            } catch (e) {
                 this.searchError = "网络错误，搜索失败";
                 this.searchResults = [];
-            });
+            }
         },
 
         openConfirmNominationModal(character) {

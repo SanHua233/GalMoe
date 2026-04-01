@@ -49,7 +49,7 @@
                 <h2>赛制查询</h2>
                 <p>点击查看完整赛制说明</p>
             </div>
-            <div class="info-box clickable" @click="navigateTo('提名')">
+            <div class="info-box clickable" @click="goToCurrentStage">
                 <h2>前往投票</h2>
                 <p>点击进入当前阶段投票页面</p>
             </div>
@@ -121,7 +121,8 @@
                     </div>
                 </div>
                 <div class="vote-action">
-                    <button v-if="!hasUserVotedInPreliminary" class="vote-submit-btn" @click="submitPreliminaryVote" :disabled="preliminarySubmitting">提交投票</button>
+                    <button v-if="dbStage === '预选赛阶段' && !hasUserVotedInPreliminary" class="vote-submit-btn" @click="submitPreliminaryVote" :disabled="preliminarySubmitting">提交投票</button>
+                    <button v-else-if="dbStage !== '预选赛阶段'" class="vote-submit-btn disabled" disabled>无法投票</button>
                     <button v-else class="vote-submit-btn disabled" disabled>您已完成投票，请勿重复提交</button>
                 </div>
             </div>
@@ -141,7 +142,7 @@
                         </div>
                         <div class="rank-votes">[[ char.vote_count ]] 票</div>
                     </div>
-                    <!-- 在淘汰线索引后插入淘汰线 -->
+                    <!-- 淘汰线：在对应索引后插入 -->
                     <div v-if="idx === eliminationLineIndex" class="elimination-line">
                         <hr class="dashed-line">
                         <div class="elimination-text">以下角色将淘汰</div>
