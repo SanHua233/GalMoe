@@ -13,7 +13,7 @@ createApp({
                 "预选赛",
                 "小组赛",
                 "淘汰赛",
-                "最终决赛"
+                "赛事结果"
             ],
             showRules: false,
             showLogin: false,
@@ -59,7 +59,13 @@ createApp({
             knockoutHasVotedByTab: { qf8: false, qf4: false, sf: false, final: false },
             knockoutSubmitting: false,
             showKnockoutVoteConfirm: false,
-            knockoutRefreshTimer: null
+            knockoutRefreshTimer: null,
+
+            // 赛事结果
+            showResultsPage: false,
+            resultsLoading: false,
+            resultsFinished: false,
+            resultsTop3: null
         }
     },
     computed: {
@@ -107,6 +113,8 @@ createApp({
                 this.navigateTo('小组赛');
             } else if (this.isKnockoutStageName(this.dbStage)) {
                 this.navigateTo('淘汰赛');
+            } else if (this.dbStage === '（完赛）') {
+                this.navigateTo('赛事结果');
             } else {
                 alert('未开放阶段，请等待后台更新');
             }
@@ -203,6 +211,29 @@ createApp({
             }
         },
 
+        async loadResults() {
+            this.resultsLoading = true;
+            this.resultsFinished = false;
+            this.resultsTop3 = null;
+            try {
+                const res = await fetch("/api/results");
+                const data = await res.json();
+                if (data.success && data.finished) {
+                    this.resultsFinished = true;
+                    this.resultsTop3 = data.top3 || null;
+                } else {
+                    this.resultsFinished = false;
+                    this.resultsTop3 = null;
+                }
+            } catch (e) {
+                console.error("获取赛事结果失败:", e);
+                this.resultsFinished = false;
+                this.resultsTop3 = null;
+            } finally {
+                this.resultsLoading = false;
+            }
+        },
+
         navigateTo(stage) {
             // 先刷新阶段信息（异步）
             this.fetchCurrentStage().then(() => {
@@ -213,6 +244,7 @@ createApp({
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
                     this.showKnockoutPage = false;
+                    this.showResultsPage = false;
                     this.currentStage = '首页';
                 } else if (stage === '提名') {
                     this.stopGroupStageAutoRefresh();
@@ -221,6 +253,7 @@ createApp({
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
                     this.showKnockoutPage = false;
+                    this.showResultsPage = false;
                     this.currentStage = '提名';
                     this.fetchCharacters();
                 } else if (stage === '预选赛') {
@@ -230,6 +263,7 @@ createApp({
                     this.showPreliminaryPage = true;
                     this.showGroupStagePage = false;
                     this.showKnockoutPage = false;
+                    this.showResultsPage = false;
                     this.currentStage = '预选赛';
                     this.preliminaryActiveTab = 'vote';
                     this.loadPreliminaryData();
@@ -239,6 +273,7 @@ createApp({
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = true;
                     this.showKnockoutPage = false;
+                    this.showResultsPage = false;
                     this.currentStage = '小组赛';
                     this.groupStageActiveTab = 'vote';
                     this.loadGroupStageData();
@@ -248,18 +283,20 @@ createApp({
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
                     this.showKnockoutPage = true;
+                    this.showResultsPage = false;
                     this.currentStage = '淘汰赛';
                     this.knockoutActiveTab = this.getDefaultKnockoutTabByDbStage();
                     this.loadKnockoutTabData();
-                } else if (stage === '最终决赛') {
+                } else if (stage === '赛事结果') {
                     this.stopGroupStageAutoRefresh();
+                    this.stopKnockoutAutoRefresh();
                     this.showNominationPage = false;
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
-                    this.showKnockoutPage = true;
-                    this.currentStage = '最终决赛';
-                    this.knockoutActiveTab = 'final';
-                    this.loadKnockoutTabData();
+                    this.showKnockoutPage = false;
+                    this.showResultsPage = true;
+                    this.currentStage = '赛事结果';
+                    this.loadResults();
                 }
             });
         },
@@ -360,6 +397,7 @@ createApp({
             if (this.dbStage === '淘汰赛（8进4）') return 'qf4';
             if (this.dbStage === '半决赛') return 'sf';
             if (this.dbStage === '总决赛') return 'final';
+            if (this.dbStage === '（完赛）') return 'final';
             return 'qf8';
         },
 
@@ -371,7 +409,7 @@ createApp({
         },
 
         stageOrderIndex(stageName) {
-            const order = ['提名阶段', '预选赛阶段', '小组赛阶段', '小组赛', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'];
+            const order = ['提名阶段', '预选赛阶段', '小组赛阶段', '小组赛', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛', '（完赛）'];
             const idx = order.indexOf(stageName);
             return idx === -1 ? -1 : idx;
         },

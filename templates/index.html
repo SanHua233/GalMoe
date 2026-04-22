@@ -39,7 +39,7 @@
         </div>
 
         <!-- 首页内容 -->
-        <div class="container" v-if="!showNominationPage && !showPreliminaryPage && !showGroupStagePage && !showKnockoutPage">
+        <div class="container" v-if="!showNominationPage && !showPreliminaryPage && !showGroupStagePage && !showKnockoutPage && !showResultsPage">
             <h1 class="main-title">GalMoe 角色人气投票</h1>
             <div class="info-box">
                 <h2>当前阶段</h2>
@@ -293,6 +293,44 @@
 
                     <div class="vote-action" v-if="knockoutTabState === 'active'">
                         <button class="vote-submit-btn" @click="openKnockoutVoteConfirm" :disabled="knockoutSubmitting">投票</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 赛事结果页面 -->
+        <div v-if="showResultsPage" class="results-page">
+            <div class="info-box large-info-box">
+                <h2>赛事结果</h2>
+                <div v-if="resultsLoading" class="rank-placeholder">加载中...</div>
+                <div v-else-if="!resultsFinished" class="rank-placeholder">赛事尚未结束，请耐心等待投票结果</div>
+                <div v-else class="podium">
+                    <div class="podium-item silver">
+                        <div class="podium-rank">亚军</div>
+                        <div class="podium-card">
+                            <img v-if="resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.image_url" :src="resultsTop3.runner_up.image_url" class="podium-avatar">
+                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.name) || '' ]]</div>
+                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.cn_name && resultsTop3.runner_up.cn_name !== '无中文名'">[[ resultsTop3.runner_up.cn_name ]]</div>
+                        </div>
+                    </div>
+                    <div class="podium-item gold">
+                        <div class="podium-rank">冠军</div>
+                        <div class="podium-card">
+                            <img v-if="resultsTop3 && resultsTop3.champion && resultsTop3.champion.image_url" :src="resultsTop3.champion.image_url" class="podium-avatar">
+                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.champion && resultsTop3.champion.name) || '' ]]</div>
+                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.champion && resultsTop3.champion.cn_name && resultsTop3.champion.cn_name !== '无中文名'">[[ resultsTop3.champion.cn_name ]]</div>
+                        </div>
+                    </div>
+                    <div class="podium-item bronze">
+                        <div class="podium-rank">季军</div>
+                        <div class="podium-card">
+                            <img v-if="resultsTop3 && resultsTop3.third && resultsTop3.third.image_url" :src="resultsTop3.third.image_url" class="podium-avatar">
+                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.third && resultsTop3.third.name) || '' ]]</div>
+                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.third && resultsTop3.third.cn_name && resultsTop3.third.cn_name !== '无中文名'">[[ resultsTop3.third.cn_name ]]</div>
+                        </div>
                     </div>
                 </div>
             </div>

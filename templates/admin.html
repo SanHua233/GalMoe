@@ -41,6 +41,17 @@
                         <button @click="deleteUserVotes" class="admin-btn danger"
                             :disabled="deleting">删除用户预选赛投票</button>
                     </div>
+                    <div class="form-row">
+                        <button @click="deleteUserGroupVotes" class="admin-btn danger" :disabled="deleting">删除用户小组赛投票</button>
+                    </div>
+                    <div class="form-row">
+                        <button @click="deleteUserKnockoutVotes('淘汰赛（16进8）')" class="admin-btn danger" :disabled="deleting">删除用户八强赛投票</button>
+                        <button @click="deleteUserKnockoutVotes('淘汰赛（8进4）')" class="admin-btn danger" :disabled="deleting">删除用户四强赛投票</button>
+                    </div>
+                    <div class="form-row">
+                        <button @click="deleteUserKnockoutVotes('半决赛')" class="admin-btn danger" :disabled="deleting">删除用户半决赛投票</button>
+                        <button @click="deleteUserKnockoutVotes('总决赛')" class="admin-btn danger" :disabled="deleting">删除用户最终决赛投票</button>
+                    </div>
                     <p class="info" v-if="deleteResult">[[ deleteResult ]]</p>
                 </div>
 

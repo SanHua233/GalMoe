@@ -1001,3 +1001,105 @@ body.dark .knockout-score {
     height: 100%;
     background: #3b82f6;
 }
+
+/* ================= 赛事结果页面 ================= */
+.results-page {
+    max-width: 1100px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.podium {
+    margin-top: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 18px;
+    align-items: end;
+}
+
+.podium-item {
+    text-align: center;
+}
+
+.podium-rank {
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #0f172a;
+}
+
+body.dark .podium-rank {
+    color: #f1f5f9;
+}
+
+.podium-card {
+    background: rgba(255,255,255,0.9);
+    border-radius: 16px;
+    padding: 16px 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 3px solid transparent;
+}
+
+body.dark .podium-card {
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.podium-avatar {
+    width: 128px;
+    height: 128px;
+    border-radius: 14px;
+    object-fit: cover;
+    object-position: top;
+    margin: 0 auto 10px;
+    display: block;
+}
+
+.podium-avatar.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #cbd5e1;
+    color: #64748b;
+}
+
+body.dark .podium-avatar.placeholder {
+    background: #334155;
+    color: #94a3b8;
+}
+
+.podium-name {
+    font-weight: bold;
+    color: #0f172a;
+    font-size: 20px;
+}
+
+body.dark .podium-name {
+    color: #f1f5f9;
+}
+
+.podium-cnname {
+    margin-top: 6px;
+    font-size: 14px;
+    color: #475569;
+}
+
+body.dark .podium-cnname {
+    color: #cbd5e1;
+}
+
+.podium-item.gold .podium-card {
+    border-color: #f59e0b;
+}
+
+.podium-item.silver .podium-card {
+    border-color: #94a3b8;
+}
+
+.podium-item.bronze .podium-card {
+    border-color: #b45309;
+}
+
+.podium-item.gold .podium-avatar {
+    width: 152px;
+    height: 152px;
+}

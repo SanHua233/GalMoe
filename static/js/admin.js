@@ -9,7 +9,7 @@ createApp({
             loginError: '',
             currentStage: '',
             selectedStage: '',
-            stageOptions: ['（未开放）', '提名阶段', '预选赛阶段', '小组赛阶段', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'],
+            stageOptions: ['（未开放）', '提名阶段', '预选赛阶段', '小组赛阶段', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛', '（完赛）'],
             updatingStage: false,
             deleteUserQQ: '',
             deleting: false,
@@ -125,6 +125,52 @@ createApp({
                 this.deleting = false;
             }
         },
+        async deleteUserGroupVotes() {
+            if (!this.deleteUserQQ) {
+                alert('请输入QQ号');
+                return;
+            }
+            if (!confirm('确认删除该用户小组赛投票吗？')) return;
+            this.deleting = true;
+            this.deleteResult = '';
+            try {
+                const res = await fetch('/api/admin/delete_user_group_votes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_qq: this.deleteUserQQ })
+                });
+                const data = await res.json();
+                this.deleteResult = data.message;
+                if (!data.success) alert(data.message);
+            } catch (e) {
+                this.deleteResult = '请求失败';
+            } finally {
+                this.deleting = false;
+            }
+        },
+        async deleteUserKnockoutVotes(stage) {
+            if (!this.deleteUserQQ) {
+                alert('请输入QQ号');
+                return;
+            }
+            if (!confirm(`确认删除该用户「${stage}」投票吗？`)) return;
+            this.deleting = true;
+            this.deleteResult = '';
+            try {
+                const res = await fetch('/api/admin/delete_user_knockout_votes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_qq: this.deleteUserQQ, stage })
+                });
+                const data = await res.json();
+                this.deleteResult = data.message;
+                if (!data.success) alert(data.message);
+            } catch (e) {
+                this.deleteResult = '请求失败';
+            } finally {
+                this.deleting = false;
+            }
+        },
         async generateGroupsPreview() {
             this.generatingPreview = true;
             try {
@@ -233,7 +279,7 @@ createApp({
             try {
                 await this.fetchCurrentStage();
                 const res = await fetch('/api/admin/knockout/settle_preview', { method: 'POST' });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({ success: false, message: '服务器返回非JSON（可能500错误），请查看后端日志' }));
                 if (data.success) {
                     this.settlePreview = data;
                 } else {
