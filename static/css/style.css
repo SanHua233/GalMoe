@@ -842,3 +842,162 @@ body.dark .standings-header {
     color: #ef4444;
     font-weight: bold;
 }
+
+/* ================= 淘汰赛页面 ================= */
+.knockout-page {
+    max-width: 1100px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.knockout-matches-wrap {
+    margin-top: 20px;
+}
+
+.knockout-match-card {
+    background: rgba(255,255,255,0.9);
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+}
+
+body.dark .knockout-match-card {
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.knockout-match-card.finished {
+    opacity: 0.95;
+}
+
+.knockout-match-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    color: #475569;
+}
+
+body.dark .knockout-match-header {
+    color: #cbd5e1;
+}
+
+.knockout-match-title {
+    font-weight: bold;
+    color: #0f172a;
+}
+
+body.dark .knockout-match-title {
+    color: #f1f5f9;
+}
+
+.knockout-hint {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.knockout-row {
+    display: grid;
+    grid-template-columns: 1fr 220px 1fr;
+    gap: 16px;
+    align-items: center;
+}
+
+.knockout-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 2px solid transparent;
+    background: rgba(241,245,249,0.8);
+    transition: 0.2s;
+}
+
+body.dark .knockout-side {
+    background: rgba(51,65,85,0.35);
+}
+
+.knockout-side.clickable {
+    cursor: pointer;
+}
+
+.knockout-side.clickable:hover {
+    transform: translateY(-1px);
+}
+
+.knockout-side.selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+body.dark .knockout-side.selected {
+    background: #1e3a8a;
+    border-color: #60a5fa;
+}
+
+.knockout-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    object-fit: cover;
+    object-position: top;
+    flex-shrink: 0;
+}
+
+.knockout-avatar.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #cbd5e1;
+    color: #64748b;
+}
+
+body.dark .knockout-avatar.placeholder {
+    background: #334155;
+    color: #94a3b8;
+}
+
+.knockout-name {
+    font-weight: bold;
+    color: #0f172a;
+}
+
+body.dark .knockout-name {
+    color: #f1f5f9;
+}
+
+.knockout-center {
+    text-align: center;
+}
+
+.knockout-score {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: #0f172a;
+}
+
+body.dark .knockout-score {
+    color: #f1f5f9;
+}
+
+.knockout-bar {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(148,163,184,0.35);
+    display: flex;
+}
+
+.knockout-bar-a {
+    height: 100%;
+    background: #ef4444;
+}
+
+.knockout-bar-b {
+    height: 100%;
+    background: #3b82f6;
+}

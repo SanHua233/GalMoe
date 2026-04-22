@@ -1008,6 +1008,168 @@ def _knockout_build_next_matches(stage_name: str, matches_with_scores):
 
     return {"next_stage": next_stage, "current_scored": scored_preview, "next_matches": next_matches}
 
+def _validate_knockout_stage_name(stage_name: str):
+    allowed = {"淘汰赛（16进8）", "淘汰赛（8进4）", "半决赛", "总决赛"}
+    return stage_name in allowed
+
+@app.route('/api/knockout/matches', methods=['GET'])
+def get_knockout_matches():
+    """获取淘汰赛某阶段对阵 + 实时票数"""
+    stage_name = (request.args.get("stage") or "").strip()
+    if not _validate_knockout_stage_name(stage_name):
+        return jsonify({"success": False, "message": "无效阶段参数"}), 400
+
+    conn = get_db()
+    try:
+        rows = _fetch_stage_matches_with_scores(conn, stage_name)
+        if not rows:
+            return jsonify({"success": True, "stage_name": stage_name, "matches": []})
+
+        matches = []
+        for r in rows:
+            matches.append({
+                "match_id": r["match_id"],
+                "stage_name": r["stage_name"],
+                "final_type": r.get("final_type"),
+                "match_order": r.get("match_order"),
+                "char_a": {
+                    "id": r["char_a_id"],
+                    "name": r["a_name"],
+                    "cn_name": r.get("a_cn_name") or "",
+                    "image_url": r.get("a_image_url") or "",
+                    "votes": int(r["score_a"] or 0),
+                },
+                "char_b": {
+                    "id": r["char_b_id"],
+                    "name": r["b_name"],
+                    "cn_name": r.get("b_cn_name") or "",
+                    "image_url": r.get("b_image_url") or "",
+                    "votes": int(r["score_b"] or 0),
+                },
+            })
+        return jsonify({"success": True, "stage_name": stage_name, "matches": matches})
+    finally:
+        conn.close()
+
+@app.route('/api/knockout/user_votes', methods=['GET'])
+def get_knockout_user_votes():
+    """获取当前登录用户在淘汰赛某阶段已投的对战（用于回显/禁用）"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "未登录"}), 401
+    stage_name = (request.args.get("stage") or "").strip()
+    if not _validate_knockout_stage_name(stage_name):
+        return jsonify({"success": False, "message": "无效阶段参数"}), 400
+
+    user_qq = session["user"]
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT mv.match_id, mv.voted_char_id
+            FROM match_votes mv
+            JOIN matches m ON m.id = mv.match_id
+            WHERE m.stage_name = %s AND mv.user_qq = %s
+        """, (stage_name, user_qq))
+        rows = cursor.fetchall()
+        votes = [{"match_id": int(r["match_id"]), "voted_char_id": int(r["voted_char_id"])} for r in rows]
+        return jsonify({"success": True, "votes": votes})
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/api/knockout/vote', methods=['POST'])
+def submit_knockout_vote():
+    """提交淘汰赛某阶段投票：必须每场选一方，不可弃票"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "请先登录"}), 401
+    user_qq = session["user"]
+
+    data = request.json or {}
+    stage_name = (data.get("stage") or "").strip()
+    votes = data.get("votes", [])
+
+    if not _validate_knockout_stage_name(stage_name):
+        return jsonify({"success": False, "message": "无效阶段参数"}), 400
+    if not isinstance(votes, list):
+        return jsonify({"success": False, "message": "投票数据格式错误"}), 400
+
+    # 去重 match_id，保留最后一次
+    by_match = {}
+    for item in votes:
+        if not isinstance(item, dict):
+            continue
+        match_id = item.get("match_id")
+        voted_char_id = item.get("voted_char_id")
+        if match_id is None or voted_char_id is None:
+            continue
+        try:
+            by_match[int(match_id)] = int(voted_char_id)
+        except (TypeError, ValueError):
+            continue
+
+    if not by_match:
+        return jsonify({"success": False, "message": "请先完成本阶段所有对战选择"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cur_stage = _get_system_value(conn, "cur_stage")
+        if cur_stage != stage_name:
+            return jsonify({"success": False, "message": "当前不在该阶段，无法投票"}), 400
+
+        # 查询本阶段所有对战
+        cursor.execute("""
+            SELECT id, char_a_id, char_b_id
+            FROM matches
+            WHERE stage_name = %s
+            ORDER BY
+                CASE WHEN match_order IS NULL THEN 1 ELSE 0 END ASC,
+                match_order ASC,
+                id ASC
+        """, (stage_name,))
+        stage_matches = cursor.fetchall()
+        if not stage_matches:
+            return jsonify({"success": False, "message": "本阶段对阵尚未生成"}), 400
+
+        all_match_ids = [int(r["id"]) for r in stage_matches]
+        if set(by_match.keys()) != set(all_match_ids):
+            return jsonify({"success": False, "message": "必须对本阶段每场对战投票（不可弃票）"}), 400
+
+        # 已投过票：禁止再次提交（按该阶段任意一票判断）
+        placeholders = ",".join(["%s"] * len(all_match_ids))
+        cursor.execute(f"""
+            SELECT 1
+            FROM match_votes
+            WHERE user_qq = %s AND match_id IN ({placeholders})
+            LIMIT 1
+        """, [user_qq, *all_match_ids])
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "您已完成本阶段投票，不能重复提交"}), 400
+
+        match_map = {int(r["id"]): r for r in stage_matches}
+        payload = []
+        for match_id, voted_char_id in by_match.items():
+            r = match_map[match_id]
+            a_id = int(r["char_a_id"])
+            b_id = int(r["char_b_id"])
+            if voted_char_id not in (a_id, b_id):
+                return jsonify({"success": False, "message": f"对战 {match_id} 的投票角色不合法"}), 400
+            payload.append((match_id, user_qq, voted_char_id))
+
+        cursor.executemany(
+            "INSERT INTO match_votes (match_id, user_qq, voted_char_id) VALUES (%s, %s, %s)",
+            payload,
+        )
+        conn.commit()
+        return jsonify({"success": True, "message": "投票成功"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"提交淘汰赛投票失败: {str(e)}")
+        return jsonify({"success": False, "message": f"投票失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.route('/api/admin/knockout/settle_preview', methods=['POST'])
 @admin_required
 def admin_knockout_settle_preview():

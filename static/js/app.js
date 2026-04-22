@@ -49,7 +49,17 @@ createApp({
             groupStageHasVoted: false,
             groupStageSubmitting: false,
             showGroupVoteConfirm: false,
-            groupStageRefreshTimer: null
+            groupStageRefreshTimer: null,
+
+            // 淘汰赛相关数据
+            showKnockoutPage: false,
+            knockoutActiveTab: 'qf8',
+            knockoutMatchesByTab: { qf8: [], qf4: [], sf: [], final: [] },
+            knockoutSelectionsByTab: { qf8: {}, qf4: {}, sf: {}, final: {} },
+            knockoutHasVotedByTab: { qf8: false, qf4: false, sf: false, final: false },
+            knockoutSubmitting: false,
+            showKnockoutVoteConfirm: false,
+            knockoutRefreshTimer: null
         }
     },
     computed: {
@@ -67,6 +77,12 @@ createApp({
             } else {
                 return total - 1; // 最后一名索引
             }
+        },
+        knockoutTabState() {
+            return this.getKnockoutTabState(this.knockoutActiveTab);
+        },
+        knockoutMatches() {
+            return this.knockoutMatchesByTab[this.knockoutActiveTab] || [];
         }
     },
     mounted() {
@@ -87,8 +103,10 @@ createApp({
                 this.navigateTo('提名');
             } else if (this.dbStage === '预选赛阶段') {
                 this.navigateTo('预选赛');
-            } else if (this.dbStage === '小组赛阶段') {
+            } else if (this.dbStage === '小组赛阶段' || this.dbStage === '小组赛') {
                 this.navigateTo('小组赛');
+            } else if (this.isKnockoutStageName(this.dbStage)) {
+                this.navigateTo('淘汰赛');
             } else {
                 alert('未开放阶段，请等待后台更新');
             }
@@ -113,6 +131,9 @@ createApp({
                 if (this.showGroupStagePage) {
                     this.loadGroupStageData();
                 }
+                if (this.showKnockoutPage) {
+                    this.loadKnockoutTabData();
+                }
             } else {
                 this.loginError = data.message;
             }
@@ -132,6 +153,11 @@ createApp({
                 this.groupStageSelections = {};
                 this.loadGroupStageData();
             }
+            if (this.showKnockoutPage) {
+                this.knockoutHasVotedByTab[this.knockoutActiveTab] = false;
+                this.knockoutSelectionsByTab[this.knockoutActiveTab] = {};
+                this.loadKnockoutTabData();
+            }
         },
 
         async checkLogin() {
@@ -145,6 +171,9 @@ createApp({
                 }
                 if (this.showGroupStagePage) {
                     this.loadGroupStageData();
+                }
+                if (this.showKnockoutPage) {
+                    this.loadKnockoutTabData();
                 }
             } else {
                 this.loggedIn = false;
@@ -179,32 +208,58 @@ createApp({
             this.fetchCurrentStage().then(() => {
                 if (stage === '首页') {
                     this.stopGroupStageAutoRefresh();
+                    this.stopKnockoutAutoRefresh();
                     this.showNominationPage = false;
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
+                    this.showKnockoutPage = false;
                     this.currentStage = '首页';
                 } else if (stage === '提名') {
                     this.stopGroupStageAutoRefresh();
+                    this.stopKnockoutAutoRefresh();
                     this.showNominationPage = true;
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = false;
+                    this.showKnockoutPage = false;
                     this.currentStage = '提名';
                     this.fetchCharacters();
                 } else if (stage === '预选赛') {
                     this.stopGroupStageAutoRefresh();
+                    this.stopKnockoutAutoRefresh();
                     this.showNominationPage = false;
                     this.showPreliminaryPage = true;
                     this.showGroupStagePage = false;
+                    this.showKnockoutPage = false;
                     this.currentStage = '预选赛';
                     this.preliminaryActiveTab = 'vote';
                     this.loadPreliminaryData();
                 } else if (stage === '小组赛') {
+                    this.stopKnockoutAutoRefresh();
                     this.showNominationPage = false;
                     this.showPreliminaryPage = false;
                     this.showGroupStagePage = true;
+                    this.showKnockoutPage = false;
                     this.currentStage = '小组赛';
                     this.groupStageActiveTab = 'vote';
                     this.loadGroupStageData();
+                } else if (stage === '淘汰赛') {
+                    this.stopGroupStageAutoRefresh();
+                    this.showNominationPage = false;
+                    this.showPreliminaryPage = false;
+                    this.showGroupStagePage = false;
+                    this.showKnockoutPage = true;
+                    this.currentStage = '淘汰赛';
+                    this.knockoutActiveTab = this.getDefaultKnockoutTabByDbStage();
+                    this.loadKnockoutTabData();
+                } else if (stage === '最终决赛') {
+                    this.stopGroupStageAutoRefresh();
+                    this.showNominationPage = false;
+                    this.showPreliminaryPage = false;
+                    this.showGroupStagePage = false;
+                    this.showKnockoutPage = true;
+                    this.currentStage = '最终决赛';
+                    this.knockoutActiveTab = 'final';
+                    this.loadKnockoutTabData();
                 }
             });
         },
@@ -292,6 +347,214 @@ createApp({
             } catch (e) {
                 console.error("加载小组赛数据失败:", e);
             }
+        },
+
+        // ==================== 淘汰赛 ====================
+
+        isKnockoutStageName(stageName) {
+            return ['淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'].includes(stageName);
+        },
+
+        getDefaultKnockoutTabByDbStage() {
+            if (this.dbStage === '淘汰赛（16进8）') return 'qf8';
+            if (this.dbStage === '淘汰赛（8进4）') return 'qf4';
+            if (this.dbStage === '半决赛') return 'sf';
+            if (this.dbStage === '总决赛') return 'final';
+            return 'qf8';
+        },
+
+        knockoutTabToStageName(tab) {
+            if (tab === 'qf8') return '淘汰赛（16进8）';
+            if (tab === 'qf4') return '淘汰赛（8进4）';
+            if (tab === 'sf') return '半决赛';
+            return '总决赛';
+        },
+
+        stageOrderIndex(stageName) {
+            const order = ['提名阶段', '预选赛阶段', '小组赛阶段', '小组赛', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'];
+            const idx = order.indexOf(stageName);
+            return idx === -1 ? -1 : idx;
+        },
+
+        getKnockoutTabState(tab) {
+            const stageName = this.knockoutTabToStageName(tab);
+            const curIdx = this.stageOrderIndex(this.dbStage);
+            const tabIdx = this.stageOrderIndex(stageName);
+            if (curIdx === -1 || tabIdx === -1) return 'not_started';
+            if (curIdx < tabIdx) return 'not_started';
+            if (curIdx > tabIdx) return 'finished';
+            return 'active';
+        },
+
+        setKnockoutTab(tab) {
+            this.knockoutActiveTab = tab;
+            this.loadKnockoutTabData();
+        },
+
+        startKnockoutAutoRefresh() {
+            if (this.knockoutRefreshTimer) return;
+            this.knockoutRefreshTimer = setInterval(() => {
+                if (!this.showKnockoutPage) return;
+                this.fetchKnockoutMatches(this.knockoutActiveTab);
+            }, 10000);
+        },
+
+        stopKnockoutAutoRefresh() {
+            if (!this.knockoutRefreshTimer) return;
+            clearInterval(this.knockoutRefreshTimer);
+            this.knockoutRefreshTimer = null;
+        },
+
+        async loadKnockoutTabData() {
+            try {
+                await this.fetchKnockoutMatches(this.knockoutActiveTab);
+                if (this.loggedIn) {
+                    await this.fetchKnockoutUserVotes(this.knockoutActiveTab);
+                } else {
+                    this.knockoutHasVotedByTab[this.knockoutActiveTab] = false;
+                    this.knockoutSelectionsByTab[this.knockoutActiveTab] = {};
+                }
+                this.startKnockoutAutoRefresh();
+            } catch (e) {
+                console.error("加载淘汰赛数据失败:", e);
+            }
+        },
+
+        async fetchKnockoutMatches(tab) {
+            const stageName = this.knockoutTabToStageName(tab);
+            const res = await fetch(`/api/knockout/matches?stage=${encodeURIComponent(stageName)}`);
+            const data = await res.json();
+            if (data.success) {
+                this.knockoutMatchesByTab[tab] = data.matches || [];
+            } else {
+                this.knockoutMatchesByTab[tab] = [];
+            }
+        },
+
+        async fetchKnockoutUserVotes(tab) {
+            const stageName = this.knockoutTabToStageName(tab);
+            const res = await fetch(`/api/knockout/user_votes?stage=${encodeURIComponent(stageName)}`);
+            if (res.status === 401) {
+                this.knockoutHasVotedByTab[tab] = false;
+                this.knockoutSelectionsByTab[tab] = {};
+                return;
+            }
+            const data = await res.json();
+            if (!data.success) {
+                this.knockoutHasVotedByTab[tab] = false;
+                this.knockoutSelectionsByTab[tab] = {};
+                return;
+            }
+            const mapping = {};
+            for (const v of (data.votes || [])) {
+                mapping[v.match_id] = v.voted_char_id;
+            }
+            this.knockoutSelectionsByTab[tab] = mapping;
+            const totalMatches = (this.knockoutMatchesByTab[tab] || []).length;
+            this.knockoutHasVotedByTab[tab] = totalMatches > 0 && Object.keys(mapping).length === totalMatches;
+        },
+
+        isKnockoutSelected(matchId, charId) {
+            return this.knockoutSelectionsByTab[this.knockoutActiveTab]?.[matchId] === charId;
+        },
+
+        toggleKnockoutSelect(matchId, charId) {
+            if (this.knockoutTabState !== 'active') return;
+            if (!this.loggedIn) {
+                alert("请先登录后再进行投票");
+                this.showLogin = true;
+                return;
+            }
+            if (this.knockoutHasVotedByTab[this.knockoutActiveTab]) {
+                alert("您已完成本阶段投票，无法修改");
+                return;
+            }
+            const next = { ...(this.knockoutSelectionsByTab[this.knockoutActiveTab] || {}) };
+            next[matchId] = charId;
+            this.knockoutSelectionsByTab[this.knockoutActiveTab] = next;
+        },
+
+        knockoutBarWidth(aVotes, bVotes) {
+            const a = Number(aVotes) || 0;
+            const b = Number(bVotes) || 0;
+            const total = a + b;
+            if (total === 0) return { a: 50, b: 50 };
+            const aPct = Math.round((a / total) * 100);
+            return { a: aPct, b: 100 - aPct };
+        },
+
+        openKnockoutVoteConfirm() {
+            if (this.knockoutTabState !== 'active') return;
+            if (!this.loggedIn) {
+                alert("请先登录");
+                this.showLogin = true;
+                return;
+            }
+            const matches = this.knockoutMatchesByTab[this.knockoutActiveTab] || [];
+            if (matches.length === 0) {
+                alert('此阶段还未开始，请耐心等待');
+                return;
+            }
+            const selected = this.knockoutSelectionsByTab[this.knockoutActiveTab] || {};
+            if (Object.keys(selected).length !== matches.length) {
+                alert('本阶段每场对战必须选择一方（不可弃票）');
+                return;
+            }
+            this.showKnockoutVoteConfirm = true;
+        },
+
+        closeKnockoutVoteConfirm() {
+            this.showKnockoutVoteConfirm = false;
+        },
+
+        async submitKnockoutVote() {
+            if (this.knockoutTabState !== 'active') return;
+            if (!this.loggedIn) {
+                alert("请先登录");
+                this.showLogin = true;
+                return;
+            }
+            const stageName = this.knockoutTabToStageName(this.knockoutActiveTab);
+            const matches = this.knockoutMatchesByTab[this.knockoutActiveTab] || [];
+            const selected = this.knockoutSelectionsByTab[this.knockoutActiveTab] || {};
+            if (Object.keys(selected).length !== matches.length) {
+                alert('本阶段每场对战必须选择一方（不可弃票）');
+                return;
+            }
+            const votes = Object.entries(selected).map(([match_id, voted_char_id]) => ({
+                match_id: Number(match_id),
+                voted_char_id: Number(voted_char_id),
+            }));
+
+            this.knockoutSubmitting = true;
+            try {
+                const res = await fetch("/api/knockout/vote", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ stage: stageName, votes }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("投票成功！");
+                    this.showKnockoutVoteConfirm = false;
+                    await this.loadKnockoutTabData();
+                } else {
+                    alert("投票失败：" + data.message);
+                }
+            } catch (e) {
+                console.error("提交淘汰赛投票出错:", e);
+                alert("网络错误，请稍后重试");
+            } finally {
+                this.knockoutSubmitting = false;
+            }
+        },
+
+        handleKnockoutImageError(matchId, side) {
+            const list = this.knockoutMatchesByTab[this.knockoutActiveTab] || [];
+            const m = list.find(x => Number(x.match_id) === Number(matchId));
+            if (!m) return;
+            if (side === 'a') m.char_a.image_url = "";
+            if (side === 'b') m.char_b.image_url = "";
         },
 
         async fetchGroupStageMatches() {

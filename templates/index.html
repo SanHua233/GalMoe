@@ -39,7 +39,7 @@
         </div>
 
         <!-- 首页内容 -->
-        <div class="container" v-if="!showNominationPage && !showPreliminaryPage && !showGroupStagePage">
+        <div class="container" v-if="!showNominationPage && !showPreliminaryPage && !showGroupStagePage && !showKnockoutPage">
             <h1 class="main-title">GalMoe 角色人气投票</h1>
             <div class="info-box">
                 <h2>当前阶段</h2>
@@ -237,6 +237,67 @@
             </div>
         </div>
 
+        <!-- 淘汰赛页面 -->
+        <div v-if="showKnockoutPage" class="knockout-page">
+            <div class="preliminary-tabs">
+                <button :class="{ active: knockoutActiveTab === 'qf8' }" @click="setKnockoutTab('qf8')">八强赛</button>
+                <button :class="{ active: knockoutActiveTab === 'qf4' }" @click="setKnockoutTab('qf4')">四强赛</button>
+                <button :class="{ active: knockoutActiveTab === 'sf' }" @click="setKnockoutTab('sf')">半决赛</button>
+                <button :class="{ active: knockoutActiveTab === 'final' }" @click="setKnockoutTab('final')">最终决赛</button>
+            </div>
+
+            <div v-if="knockoutTabState === 'not_started'" class="rank-placeholder">此阶段还未开始，请耐心等待</div>
+
+            <div v-else class="knockout-matches-wrap">
+                <div v-if="knockoutMatches.length === 0" class="rank-placeholder">此阶段还未开始，请耐心等待</div>
+
+                <div v-else>
+                    <div v-for="m in knockoutMatches" :key="m.match_id" class="knockout-match-card"
+                         :class="{ finished: knockoutTabState === 'finished' }">
+                        <div class="knockout-match-header">
+                            <div class="knockout-match-title">
+                                <span v-if="m.final_type === 'third_place'">季军战</span>
+                                <span v-else-if="m.final_type === 'championship'">决赛</span>
+                                <span v-else>第[[ m.match_order || '' ]]场</span>
+                            </div>
+                            <div v-if="knockoutTabState === 'active'" class="knockout-hint">请选择一方投票</div>
+                            <div v-else class="knockout-hint">本轮已结束</div>
+                        </div>
+
+                        <div class="knockout-row">
+                            <div class="knockout-side"
+                                 :class="{ selected: isKnockoutSelected(m.match_id, m.char_a.id), clickable: knockoutTabState === 'active' }"
+                                 @click="toggleKnockoutSelect(m.match_id, m.char_a.id)">
+                                <img v-if="m.char_a.image_url" :src="m.char_a.image_url" class="knockout-avatar" @error="handleKnockoutImageError(m.match_id, 'a')">
+                                <div v-else class="knockout-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                <div class="knockout-name">[[ m.char_a.name ]]</div>
+                            </div>
+
+                            <div class="knockout-center">
+                                <div class="knockout-score">[[ m.char_a.votes ]] : [[ m.char_b.votes ]]</div>
+                                <div class="knockout-bar">
+                                    <div class="knockout-bar-a" :style="{ width: knockoutBarWidth(m.char_a.votes, m.char_b.votes).a + '%' }"></div>
+                                    <div class="knockout-bar-b" :style="{ width: knockoutBarWidth(m.char_a.votes, m.char_b.votes).b + '%' }"></div>
+                                </div>
+                            </div>
+
+                            <div class="knockout-side"
+                                 :class="{ selected: isKnockoutSelected(m.match_id, m.char_b.id), clickable: knockoutTabState === 'active' }"
+                                 @click="toggleKnockoutSelect(m.match_id, m.char_b.id)">
+                                <img v-if="m.char_b.image_url" :src="m.char_b.image_url" class="knockout-avatar" @error="handleKnockoutImageError(m.match_id, 'b')">
+                                <div v-else class="knockout-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                <div class="knockout-name">[[ m.char_b.name ]]</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vote-action" v-if="knockoutTabState === 'active'">
+                        <button class="vote-submit-btn" @click="openKnockoutVoteConfirm" :disabled="knockoutSubmitting">投票</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 赛制弹窗 -->
         <div class="modal" v-if="showRules" @click.self="showRules = false">
             <div class="modal-content">
@@ -323,6 +384,19 @@
                 <div class="confirm-btn-group">
                     <button class="cancel-btn" @click="closeGroupStageVoteConfirm">取消</button>
                     <button class="submit-btn" @click="submitGroupStageVote" :disabled="groupStageSubmitting">提交</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 淘汰赛投票确认弹窗 -->
+        <div class="modal" v-if="showKnockoutVoteConfirm" @click.self="closeKnockoutVoteConfirm">
+            <div class="modal-content confirm-vote-modal">
+                <span class="close" @click="closeKnockoutVoteConfirm">&times;</span>
+                <h2>确认投票</h2>
+                <p class="confirm-tip">是否确认提交本阶段投票？本阶段每场对战必须选择一方，提交后不可修改。</p>
+                <div class="confirm-btn-group">
+                    <button class="cancel-btn" @click="closeKnockoutVoteConfirm">取消</button>
+                    <button class="submit-btn" @click="submitKnockoutVote" :disabled="knockoutSubmitting">提交</button>
                 </div>
             </div>
         </div>
