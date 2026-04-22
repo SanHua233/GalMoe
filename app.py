@@ -332,6 +332,349 @@ def submit_preliminary_vote():
         app.logger.error(f"提交投票失败: {str(e)}")
         return jsonify({"success": False, "message": f"投票失败: {str(e)}"}), 500
 
+# ==================== 小组赛 ====================
+
+def _get_system_value(conn, data_name: str):
+    cursor = conn.cursor()
+    cursor.execute("SELECT data_value FROM system_data WHERE data_name = %s", (data_name,))
+    row = cursor.fetchone()
+    cursor.close()
+    return row["data_value"] if row else None
+
+def _fetch_group_stage_matches_with_scores(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            m.id AS match_id,
+            m.group_name,
+            m.match_order,
+            m.char_a_id,
+            m.char_b_id,
+            a.name AS a_name,
+            a.cn_name AS a_cn_name,
+            a.image_url AS a_image_url,
+            b.name AS b_name,
+            b.cn_name AS b_cn_name,
+            b.image_url AS b_image_url,
+            COALESCE(SUM(CASE WHEN mv.voted_char_id = m.char_a_id THEN 1 ELSE 0 END), 0) AS score_a,
+            COALESCE(SUM(CASE WHEN mv.voted_char_id = m.char_b_id THEN 1 ELSE 0 END), 0) AS score_b
+        FROM matches m
+        JOIN char_data a ON a.id = m.char_a_id
+        JOIN char_data b ON b.id = m.char_b_id
+        LEFT JOIN match_votes mv ON mv.match_id = m.id
+        WHERE m.stage_name = '小组赛'
+        GROUP BY m.id
+        ORDER BY m.group_name ASC, m.match_order ASC, m.id ASC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+    for r in rows:
+        r["score_a"] = int(r["score_a"] or 0)
+        r["score_b"] = int(r["score_b"] or 0)
+    return rows
+
+def _compute_group_stage_standings(match_rows):
+    # group -> char_id -> stats
+    standings = {}
+    char_meta = {}
+
+    for r in match_rows:
+        a_id = int(r["char_a_id"])
+        b_id = int(r["char_b_id"])
+        char_meta[a_id] = {"id": a_id, "name": r["a_name"], "cn_name": r.get("a_cn_name") or "", "image_url": r.get("a_image_url") or ""}
+        char_meta[b_id] = {"id": b_id, "name": r["b_name"], "cn_name": r.get("b_cn_name") or "", "image_url": r.get("b_image_url") or ""}
+
+    def ensure(group_name, char_id):
+        if group_name not in standings:
+            standings[group_name] = {}
+        if char_id not in standings[group_name]:
+            standings[group_name][char_id] = {
+                "played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "points": 0,
+                "goals_for": 0,
+                "goals_against": 0,
+                "goal_diff": 0,
+            }
+        return standings[group_name][char_id]
+
+    for r in match_rows:
+        group_name = r.get("group_name")
+        if not group_name:
+            continue
+        a_id = int(r["char_a_id"])
+        b_id = int(r["char_b_id"])
+        score_a = int(r["score_a"] or 0)
+        score_b = int(r["score_b"] or 0)
+
+        a = ensure(group_name, a_id)
+        b = ensure(group_name, b_id)
+
+        a["played"] += 1
+        b["played"] += 1
+        a["goals_for"] += score_a
+        a["goals_against"] += score_b
+        b["goals_for"] += score_b
+        b["goals_against"] += score_a
+
+        if score_a > score_b:
+            a["wins"] += 1
+            a["points"] += 3
+            b["losses"] += 1
+        elif score_b > score_a:
+            b["wins"] += 1
+            b["points"] += 3
+            a["losses"] += 1
+        else:
+            a["draws"] += 1
+            b["draws"] += 1
+            a["points"] += 1
+            b["points"] += 1
+
+    # finalize goal diff and format for frontend
+    result = {}
+    for group_name, group_stats in standings.items():
+        rows = []
+        for char_id, s in group_stats.items():
+            s["goal_diff"] = int(s["goals_for"]) - int(s["goals_against"])
+            meta = char_meta.get(char_id, {"id": char_id, "name": "", "cn_name": "", "image_url": ""})
+            rows.append({
+                **meta,
+                **s
+            })
+
+        rows.sort(key=lambda x: (-x["points"], -x["goal_diff"], -x["goals_for"], x["name"]))
+        result[group_name] = rows
+    return result
+
+def _sync_group_stage_caches(conn, match_rows, standings_by_group):
+    cursor = conn.cursor()
+    try:
+        # sync match scores
+        cursor.executemany(
+            "UPDATE matches SET score_a = %s, score_b = %s WHERE id = %s AND stage_name = '小组赛'",
+            [(r["score_a"], r["score_b"], r["match_id"]) for r in match_rows],
+        )
+
+        # upsert standings
+        upsert_sql = """
+            INSERT INTO group_standings
+                (group_name, char_id, played, wins, draws, losses, points, goal_diff, goals_for, goals_against)
+            VALUES
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                played = VALUES(played),
+                wins = VALUES(wins),
+                draws = VALUES(draws),
+                losses = VALUES(losses),
+                points = VALUES(points),
+                goal_diff = VALUES(goal_diff),
+                goals_for = VALUES(goals_for),
+                goals_against = VALUES(goals_against)
+        """
+        payload = []
+        for group_name, rows in standings_by_group.items():
+            for r in rows:
+                payload.append((
+                    group_name,
+                    r["id"],
+                    r["played"],
+                    r["wins"],
+                    r["draws"],
+                    r["losses"],
+                    r["points"],
+                    r["goal_diff"],
+                    r["goals_for"],
+                    r["goals_against"],
+                ))
+        if payload:
+            cursor.executemany(upsert_sql, payload)
+    finally:
+        cursor.close()
+
+@app.route("/api/group_stage/matches", methods=["GET"])
+def get_group_stage_matches():
+    """获取小组赛所有对战 + 实时票数（按组返回）"""
+    conn = get_db()
+    try:
+        rows = _fetch_group_stage_matches_with_scores(conn)
+        if not rows:
+            return jsonify({"success": False, "message": "小组赛对战尚未生成，请联系管理员生成分组"}), 400
+
+        groups = {}
+        for r in rows:
+            group_name = r["group_name"]
+            groups.setdefault(group_name, []).append({
+                "match_id": r["match_id"],
+                "group_name": group_name,
+                "match_order": r.get("match_order"),
+                "char_a": {
+                    "id": r["char_a_id"],
+                    "name": r["a_name"],
+                    "cn_name": r.get("a_cn_name") or "",
+                    "image_url": r.get("a_image_url") or "",
+                    "votes": r["score_a"],
+                },
+                "char_b": {
+                    "id": r["char_b_id"],
+                    "name": r["b_name"],
+                    "cn_name": r.get("b_cn_name") or "",
+                    "image_url": r.get("b_image_url") or "",
+                    "votes": r["score_b"],
+                },
+            })
+
+        ordered = {}
+        for group_name in sorted(groups.keys()):
+            ordered[group_name] = groups[group_name]
+        return jsonify({"success": True, "groups": ordered})
+    finally:
+        conn.close()
+
+@app.route("/api/group_stage/standings", methods=["GET"])
+def get_group_stage_standings():
+    """获取小组赛实时积分榜（按组返回）"""
+    conn = get_db()
+    try:
+        match_rows = _fetch_group_stage_matches_with_scores(conn)
+        if not match_rows:
+            return jsonify({"success": False, "message": "小组赛对战尚未生成，请联系管理员生成分组"}), 400
+        standings_by_group = _compute_group_stage_standings(match_rows)
+        ordered = {}
+        for group_name in sorted(standings_by_group.keys()):
+            ordered[group_name] = standings_by_group[group_name]
+        return jsonify({"success": True, "groups": ordered})
+    finally:
+        conn.close()
+
+@app.route("/api/group_stage/user_votes", methods=["GET"])
+def get_group_stage_user_votes():
+    """获取当前登录用户在小组赛已投的对战（用于回显/禁用）"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "未登录"}), 401
+    user_qq = session["user"]
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT mv.match_id, mv.voted_char_id
+            FROM match_votes mv
+            JOIN matches m ON m.id = mv.match_id
+            WHERE m.stage_name = '小组赛' AND mv.user_qq = %s
+        """, (user_qq,))
+        rows = cursor.fetchall()
+        votes = [{"match_id": r["match_id"], "voted_char_id": r["voted_char_id"]} for r in rows]
+        return jsonify({"success": True, "has_voted": len(votes) > 0, "votes": votes})
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route("/api/group_stage/vote", methods=["POST"])
+def submit_group_stage_vote():
+    """提交小组赛投票（每组至少投1场；允许部分对战弃票即不提交该场）"""
+    if "user" not in session:
+        return jsonify({"success": False, "message": "请先登录"}), 401
+    user_qq = session["user"]
+
+    data = request.json or {}
+    votes = data.get("votes", [])
+    if not isinstance(votes, list):
+        return jsonify({"success": False, "message": "投票数据格式错误"}), 400
+    if not votes:
+        return jsonify({"success": False, "message": "请至少选择一场对战"}), 400
+
+    # 去重 match_id，保留最后一次
+    by_match = {}
+    for item in votes:
+        if not isinstance(item, dict):
+            continue
+        match_id = item.get("match_id")
+        voted_char_id = item.get("voted_char_id")
+        if match_id is None or voted_char_id is None:
+            continue
+        try:
+            by_match[int(match_id)] = int(voted_char_id)
+        except (TypeError, ValueError):
+            continue
+
+    if not by_match:
+        return jsonify({"success": False, "message": "请至少选择一场对战"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cur_stage = _get_system_value(conn, "cur_stage")
+        if cur_stage not in ("小组赛", "小组赛阶段"):
+            return jsonify({"success": False, "message": "当前不在小组赛阶段，无法投票"}), 400
+
+        # 已投过票：禁止再次提交（按“小组赛任意一票”判断）
+        cursor.execute("""
+            SELECT 1
+            FROM match_votes mv
+            JOIN matches m ON m.id = mv.match_id
+            WHERE m.stage_name = '小组赛' AND mv.user_qq = %s
+            LIMIT 1
+        """, (user_qq,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "您已完成小组赛投票，不能重复提交"}), 400
+
+        match_ids = list(by_match.keys())
+        placeholders = ",".join(["%s"] * len(match_ids))
+        cursor.execute(f"""
+            SELECT id, group_name, char_a_id, char_b_id
+            FROM matches
+            WHERE stage_name = '小组赛' AND id IN ({placeholders})
+        """, match_ids)
+        match_rows = cursor.fetchall()
+        match_map = {int(r["id"]): r for r in match_rows}
+
+        missing = [mid for mid in match_ids if mid not in match_map]
+        if missing:
+            return jsonify({"success": False, "message": f"存在无效对战ID: {missing}"}), 400
+
+        # 校验：voted_char_id 必须属于该场对战双方
+        votes_payload = []
+        voted_groups = set()
+        for match_id, voted_char_id in by_match.items():
+            r = match_map[match_id]
+            a_id = int(r["char_a_id"])
+            b_id = int(r["char_b_id"])
+            if voted_char_id not in (a_id, b_id):
+                return jsonify({"success": False, "message": f"对战 {match_id} 的投票角色不合法"}), 400
+            voted_groups.add(r["group_name"])
+            votes_payload.append((match_id, user_qq, voted_char_id))
+
+        # 校验：每组至少投 1 场
+        cursor.execute("SELECT DISTINCT group_name FROM matches WHERE stage_name = '小组赛' ORDER BY group_name ASC")
+        all_groups = [r["group_name"] for r in cursor.fetchall() if r.get("group_name")]
+        missing_groups = [g for g in all_groups if g not in voted_groups]
+        if missing_groups:
+            return jsonify({"success": False, "message": f"每组至少投1场：缺少 {', '.join(missing_groups)} 组"}), 400
+
+        try:
+            cursor.executemany(
+                "INSERT INTO match_votes (match_id, user_qq, voted_char_id) VALUES (%s, %s, %s)",
+                votes_payload,
+            )
+
+            # 投票后同步冗余字段（matches.score_a/score_b + group_standings）
+            match_rows_scored = _fetch_group_stage_matches_with_scores(conn)
+            standings_by_group = _compute_group_stage_standings(match_rows_scored)
+            _sync_group_stage_caches(conn, match_rows_scored, standings_by_group)
+
+            conn.commit()
+            return jsonify({"success": True, "message": "投票成功"})
+        except Exception as e:
+            conn.rollback()
+            app.logger.error(f"提交小组赛投票失败: {str(e)}")
+            return jsonify({"success": False, "message": f"投票失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 # ==================== 管理员后台 ====================
 
 def admin_required(f):
@@ -378,7 +721,7 @@ def update_stage():
     new_stage = data.get('stage')
     if not new_stage:
         return jsonify({"success": False, "message": "缺少阶段参数"}), 400
-    valid_stages = ["（未开放）", "提名阶段", "预选赛阶段", "小组赛", "淘汰赛（16进8）", "淘汰赛（8进4）", "半决赛", "总决赛"]
+    valid_stages = ["（未开放）", "提名阶段", "预选赛阶段", "小组赛阶段", "淘汰赛（16进8）", "淘汰赛（8进4）", "半决赛", "总决赛"]
     if new_stage not in valid_stages:
         return jsonify({"success": False, "message": "无效的阶段值"}), 400
     conn = get_db()

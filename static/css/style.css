@@ -680,3 +680,165 @@ body.dark .rank-cnname {
     font-size: 14px;
     font-weight: bold;
 }
+
+/* ================= 小组赛页面 ================= */
+.group-stage-page {
+    max-width: 1200px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+.stage-tip {
+    text-align: center;
+    margin: 10px 0 25px;
+    color: #ef4444;
+    font-weight: bold;
+}
+
+.group-section {
+    margin-top: 30px;
+}
+
+.group-title {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 14px;
+    color: #0f172a;
+}
+
+body.dark .group-title {
+    color: #f1f5f9;
+}
+
+.group-matches-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.group-match-box {
+    background: rgba(255,255,255,0.9);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+body.dark .group-match-box {
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.group-match-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    color: #475569;
+    font-size: 14px;
+}
+
+body.dark .group-match-header {
+    color: #cbd5e1;
+}
+
+.match-clear-btn {
+    border: none;
+    background: #e2e8f0;
+    color: #334155;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+body.dark .match-clear-btn {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+.match-clear-btn:hover {
+    background: #cbd5e1;
+}
+
+body.dark .match-clear-btn:hover {
+    background: #475569;
+}
+
+.group-match-option {
+    cursor: pointer;
+}
+
+.group-match-option .card-left {
+    width: 80px;
+    height: 80px;
+}
+
+.group-match-option .card-name {
+    font-size: 16px;
+}
+
+.group-match-vs {
+    text-align: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #94a3b8;
+    margin: 8px 0;
+}
+
+body.dark .group-match-vs {
+    color: #64748b;
+}
+
+.group-standings-wrap {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.group-standings-box {
+    margin-bottom: 24px;
+}
+
+.group-standings-table {
+    background: rgba(255,255,255,0.9);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+body.dark .group-standings-table {
+    background: rgba(255,255,255,0.08);
+}
+
+.standings-header,
+.standings-row {
+    display: grid;
+    grid-template-columns: 50px 1fr 80px 120px;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 16px;
+}
+
+.standings-header {
+    font-weight: bold;
+    color: #475569;
+    background: rgba(226,232,240,0.6);
+}
+
+body.dark .standings-header {
+    color: #cbd5e1;
+    background: rgba(51,65,85,0.6);
+}
+
+.standings-row {
+    border-top: 1px solid rgba(148,163,184,0.25);
+}
+
+.text-advance {
+    color: #3b82f6;
+    font-weight: bold;
+}
+
+.text-eliminate {
+    color: #ef4444;
+    font-weight: bold;
+}

@@ -39,7 +39,7 @@
         </div>
 
         <!-- 首页内容 -->
-        <div class="container" v-if="!showNominationPage && !showPreliminaryPage">
+        <div class="container" v-if="!showNominationPage && !showPreliminaryPage && !showGroupStagePage">
             <h1 class="main-title">GalMoe 角色人气投票</h1>
             <div class="info-box">
                 <h2>当前阶段</h2>
@@ -151,6 +151,92 @@
             </div>
         </div>
 
+        <!-- 小组赛页面 -->
+        <div v-if="showGroupStagePage" class="group-stage-page">
+            <div class="preliminary-tabs">
+                <button :class="{ active: groupStageActiveTab === 'vote' }" @click="setGroupStageTab('vote')">投票</button>
+                <button :class="{ active: groupStageActiveTab === 'rank' }" @click="setGroupStageTab('rank')">排名</button>
+            </div>
+
+            <!-- 投票选项卡 -->
+            <div v-if="groupStageActiveTab === 'vote'">
+                <div v-if="!isGroupStageOpen()" class="stage-tip">当前不在小组赛阶段，无法投票</div>
+
+                <div v-for="(matches, groupName) in groupStageGroups" :key="groupName" class="group-section">
+                    <div class="group-title">[[ groupName ]]组</div>
+                    <div class="group-matches-grid">
+                        <div v-for="(match, idx) in matches" :key="match.match_id" class="group-match-box">
+                            <div class="group-match-header">
+                                <div class="group-match-no">第[[ idx + 1 ]]场</div>
+                                <button
+                                    v-if="isGroupStageOpen() && !groupStageHasVoted && groupStageSelections[match.match_id]"
+                                    class="match-clear-btn"
+                                    @click="clearGroupStageSelect(match.match_id)"
+                                >弃票</button>
+                            </div>
+
+                            <div class="character-card-vote group-match-option"
+                                 :class="{ selected: isGroupStageSelected(match.match_id, match.char_a.id) }"
+                                 @click="toggleGroupStageSelect(match.match_id, match.char_a.id)">
+                                <div class="card-left">
+                                    <img v-if="match.char_a.image_url" :src="match.char_a.image_url" class="card-img" @error="handleGroupStageImageError(match.match_id, 'a')">
+                                    <div v-else class="card-img-placeholder"><i class="fa-solid fa-user"></i></div>
+                                </div>
+                                <div class="card-right">
+                                    <div class="card-name">[[ match.char_a.name ]]</div>
+                                    <div class="card-votes">票数：[[ match.char_a.votes ]]</div>
+                                </div>
+                            </div>
+
+                            <div class="group-match-vs">VS</div>
+
+                            <div class="character-card-vote group-match-option"
+                                 :class="{ selected: isGroupStageSelected(match.match_id, match.char_b.id) }"
+                                 @click="toggleGroupStageSelect(match.match_id, match.char_b.id)">
+                                <div class="card-left">
+                                    <img v-if="match.char_b.image_url" :src="match.char_b.image_url" class="card-img" @error="handleGroupStageImageError(match.match_id, 'b')">
+                                    <div v-else class="card-img-placeholder"><i class="fa-solid fa-user"></i></div>
+                                </div>
+                                <div class="card-right">
+                                    <div class="card-name">[[ match.char_b.name ]]</div>
+                                    <div class="card-votes">票数：[[ match.char_b.votes ]]</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vote-action">
+                    <button v-if="isGroupStageOpen() && !groupStageHasVoted" class="vote-submit-btn" @click="openGroupStageVoteConfirm" :disabled="groupStageSubmitting">投票</button>
+                    <button v-else-if="!isGroupStageOpen()" class="vote-submit-btn disabled" disabled>无法投票</button>
+                    <button v-else class="vote-submit-btn disabled" disabled>不可投票</button>
+                </div>
+            </div>
+
+            <!-- 排名选项卡 -->
+            <div v-if="groupStageActiveTab === 'rank'" class="group-standings-wrap">
+                <div v-for="(rows, groupName) in groupStageStandings" :key="groupName" class="group-standings-box">
+                    <div class="group-title">[[ groupName ]]组</div>
+                    <div class="group-standings-table">
+                        <div class="standings-header">
+                            <div class="col-rank">#</div>
+                            <div class="col-name">角色</div>
+                            <div class="col-p">积分</div>
+                            <div class="col-wdl">胜/平/负</div>
+                        </div>
+                        <div v-for="(row, idx) in rows" :key="row.id" class="standings-row">
+                            <div class="col-rank">[[ idx + 1 ]]</div>
+                            <div class="col-name">
+                                <span :class="idx < 2 ? 'text-advance' : 'text-eliminate'">[[ row.name ]]</span>
+                            </div>
+                            <div class="col-p">[[ row.points ]]</div>
+                            <div class="col-wdl">[[ row.wins ]]/[[ row.draws ]]/[[ row.losses ]]</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 赛制弹窗 -->
         <div class="modal" v-if="showRules" @click.self="showRules = false">
             <div class="modal-content">
@@ -224,6 +310,19 @@
                 <div class="confirm-btn-group">
                     <button class="cancel-btn" @click="closeConfirmNominationModal">取消</button>
                     <button class="submit-btn" @click="confirmNomination">确认</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 小组赛投票确认弹窗 -->
+        <div class="modal" v-if="showGroupVoteConfirm" @click.self="closeGroupStageVoteConfirm">
+            <div class="modal-content confirm-vote-modal">
+                <span class="close" @click="closeGroupStageVoteConfirm">&times;</span>
+                <h2>确认投票</h2>
+                <p class="confirm-tip">是否确认提交小组赛投票？提交后不可修改。</p>
+                <div class="confirm-btn-group">
+                    <button class="cancel-btn" @click="closeGroupStageVoteConfirm">取消</button>
+                    <button class="submit-btn" @click="submitGroupStageVote" :disabled="groupStageSubmitting">提交</button>
                 </div>
             </div>
         </div>

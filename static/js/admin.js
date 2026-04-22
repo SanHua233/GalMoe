@@ -9,7 +9,7 @@ createApp({
             loginError: '',
             currentStage: '',
             selectedStage: '',
-            stageOptions: ['（未开放）', '提名阶段', '预选赛阶段', '小组赛', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'],
+            stageOptions: ['（未开放）', '提名阶段', '预选赛阶段', '小组赛阶段', '淘汰赛（16进8）', '淘汰赛（8进4）', '半决赛', '总决赛'],
             updatingStage: false,
             deleteUserQQ: '',
             deleting: false,

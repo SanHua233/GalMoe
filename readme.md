@@ -34,3 +34,23 @@
 ### 最终决赛
 
 本阶段包含冠军赛与季军赛，同样为两两对决
+
+## 表关系说明
+
+预选赛：pre_votes 记录用户对角色的投票 → 按 char_id 统计票数 → 前32名进入小组赛。
+
+小组赛：
+
+32个角色分成8组，每组4人 → 生成 matches 记录，每组6场比赛。
+
+用户对每场比赛投票（match_votes）→ 统计每场 score_a / score_b → 确定胜/平/负 → 更新 group_standings。
+
+每组前两名进入淘汰赛。
+
+淘汰赛：
+
+根据小组排名生成16强对阵 → 写入 matches（stage_id 分别为 round16, quarter, semi, final, third_place）。
+
+用户投票 → 统计得票 → 确定胜者（winner_id）→ 胜者进入下一轮比赛（通过应用逻辑生成下一场 matches 记录）。
+
+角色信息：char_data 为所有角色基础表，被投票表、比赛表外键引用。
