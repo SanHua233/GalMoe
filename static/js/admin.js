@@ -17,6 +17,14 @@ createApp({
             groupsPreview: null,
             generatingPreview: false,
             clearingGroup: false,
+
+            // 淘汰赛
+            knockoutPreview: null,
+            generatingKnockout: false,
+            confirmingKnockout: false,
+            settlePreview: null,
+            settlingPreview: false,
+            settlingConfirm: false,
         }
     },
     mounted() {
@@ -138,6 +146,12 @@ createApp({
         cancelPreview() {
             this.groupsPreview = null;
         },
+        cancelKnockoutPreview() {
+            this.knockoutPreview = null;
+        },
+        cancelSettlePreview() {
+            this.settlePreview = null;
+        },
         async confirmGroups() {
             try {
                 const res = await fetch('/api/admin/confirm_groups', {
@@ -173,6 +187,85 @@ createApp({
             } finally {
                 this.clearingGroup = false;
             }
-        }
+        },
+
+        async generateKnockoutPreview() {
+            this.generatingKnockout = true;
+            this.knockoutPreview = null;
+            try {
+                const res = await fetch('/api/admin/knockout/generate_preview', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    this.knockoutPreview = data;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.generatingKnockout = false;
+            }
+        },
+
+        async confirmKnockout() {
+            if (!this.knockoutPreview) return;
+            if (!confirm('确认生成淘汰赛（16进8）对阵吗？生成后将写入数据库。')) return;
+            this.confirmingKnockout = true;
+            try {
+                const res = await fetch('/api/admin/knockout/confirm', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    this.knockoutPreview = null;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.confirmingKnockout = false;
+            }
+        },
+
+        async settleKnockoutPreview() {
+            this.settlingPreview = true;
+            this.settlePreview = null;
+            try {
+                await this.fetchCurrentStage();
+                const res = await fetch('/api/admin/knockout/settle_preview', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    this.settlePreview = data;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.settlingPreview = false;
+            }
+        },
+
+        async confirmSettleKnockout() {
+            if (!this.settlePreview) return;
+            const msg = `当前阶段：${this.settlePreview.current_stage}\n将生成：${this.settlePreview.next_stage}\n\n确认结算并生成下一阶段对阵吗？`;
+            if (!confirm(msg)) return;
+            this.settlingConfirm = true;
+            try {
+                const res = await fetch('/api/admin/knockout/settle_confirm', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    this.settlePreview = null;
+                    await this.fetchCurrentStage();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.settlingConfirm = false;
+            }
+        },
     }
 }).mount('#app');

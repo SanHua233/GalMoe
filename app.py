@@ -695,6 +695,77 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def _fetch_stage_matches_with_scores(conn, stage_name: str):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            m.id AS match_id,
+            m.stage_name,
+            m.final_type,
+            m.group_name,
+            m.match_order,
+            m.char_a_id,
+            m.char_b_id,
+            a.name AS a_name,
+            a.cn_name AS a_cn_name,
+            a.image_url AS a_image_url,
+            b.name AS b_name,
+            b.cn_name AS b_cn_name,
+            b.image_url AS b_image_url,
+            COALESCE(SUM(CASE WHEN mv.voted_char_id = m.char_a_id THEN 1 ELSE 0 END), 0) AS score_a,
+            COALESCE(SUM(CASE WHEN mv.voted_char_id = m.char_b_id THEN 1 ELSE 0 END), 0) AS score_b
+        FROM matches m
+        JOIN char_data a ON a.id = m.char_a_id
+        JOIN char_data b ON b.id = m.char_b_id
+        LEFT JOIN match_votes mv ON mv.match_id = m.id
+        WHERE m.stage_name = %s
+        GROUP BY m.id
+        ORDER BY
+            CASE WHEN m.match_order IS NULL THEN 1 ELSE 0 END ASC,
+            m.match_order ASC,
+            m.id ASC
+    """, (stage_name,))
+    rows = cursor.fetchall()
+    cursor.close()
+    for r in rows:
+        r["score_a"] = int(r["score_a"] or 0)
+        r["score_b"] = int(r["score_b"] or 0)
+    return rows
+
+def _get_group_top_two(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT
+            gs.group_name,
+            gs.char_id,
+            gs.points,
+            gs.goal_diff,
+            gs.goals_for,
+            c.name,
+            c.cn_name,
+            c.image_url
+        FROM group_standings gs
+        JOIN char_data c ON c.id = gs.char_id
+        ORDER BY
+            gs.group_name ASC,
+            gs.points DESC,
+            gs.goal_diff DESC,
+            gs.goals_for DESC,
+            gs.char_id ASC
+    """)
+    rows = cursor.fetchall()
+    cursor.close()
+
+    top_two = {}
+    for r in rows:
+        g = r["group_name"]
+        top_two.setdefault(g, [])
+        if len(top_two[g]) >= 2:
+            continue
+        top_two[g].append(r)
+
+    return top_two
+
 @app.route('/admin')
 @admin_required
 def admin_index():
@@ -731,6 +802,350 @@ def update_stage():
     cursor.close()
     conn.close()
     return jsonify({"success": True, "message": "阶段更新成功"})
+
+@app.route('/api/admin/knockout/generate_preview', methods=['POST'])
+@admin_required
+def admin_generate_knockout_preview():
+    """基于小组赛积分榜生成淘汰赛（16进8）对阵预览"""
+    conn = get_db()
+    try:
+        # 必须已有小组积分数据
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM group_standings LIMIT 1")
+        has_rows = cursor.fetchone()
+        cursor.close()
+        if not has_rows:
+            return jsonify({"success": False, "message": "未找到小组赛积分数据，请先生成并完成小组赛投票"}), 400
+
+        top_two = _get_group_top_two(conn)
+        required_groups = [chr(65 + i) for i in range(8)]  # A-H
+        missing = [g for g in required_groups if g not in top_two or len(top_two[g]) < 2]
+        if missing:
+            return jsonify({"success": False, "message": f"以下组别积分数据不足2名：{', '.join(missing)}"}), 400
+
+        placements = {}
+        for g in required_groups:
+            placements[f"{g}1"] = top_two[g][0]
+            placements[f"{g}2"] = top_two[g][1]
+
+        pairs = [
+            ("第1场", "A1", "B2"),
+            ("第2场", "C1", "D2"),
+            ("第3场", "E1", "F2"),
+            ("第4场", "G1", "H2"),
+            ("第5场", "B1", "A2"),
+            ("第6场", "D1", "C2"),
+            ("第7场", "F1", "E2"),
+            ("第8场", "H1", "G2"),
+        ]
+
+        preview = []
+        for idx, (label, left_key, right_key) in enumerate(pairs, start=1):
+            left = placements[left_key]
+            right = placements[right_key]
+            preview.append({
+                "match_order": idx,
+                "label": label,
+                "left_tag": left_key,
+                "right_tag": right_key,
+                "char_a": {
+                    "id": left["char_id"],
+                    "name": left["name"],
+                    "cn_name": left.get("cn_name") or "",
+                    "image_url": left.get("image_url") or "",
+                    "points": int(left["points"]),
+                    "goal_diff": int(left["goal_diff"]),
+                    "goals_for": int(left["goals_for"]),
+                },
+                "char_b": {
+                    "id": right["char_id"],
+                    "name": right["name"],
+                    "cn_name": right.get("cn_name") or "",
+                    "image_url": right.get("image_url") or "",
+                    "points": int(right["points"]),
+                    "goal_diff": int(right["goal_diff"]),
+                    "goals_for": int(right["goals_for"]),
+                },
+            })
+
+        return jsonify({"success": True, "stage_name": "淘汰赛（16进8）", "matches": preview})
+    finally:
+        conn.close()
+
+@app.route('/api/admin/knockout/confirm', methods=['POST'])
+@admin_required
+def admin_confirm_knockout_round16():
+    """确认生成淘汰赛（16进8）对阵（写入 matches）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM matches WHERE stage_name = '淘汰赛（16进8）' LIMIT 1")
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "淘汰赛（16进8）对阵已存在，请勿重复生成"}), 400
+
+        top_two = _get_group_top_two(conn)
+        required_groups = [chr(65 + i) for i in range(8)]  # A-H
+        missing = [g for g in required_groups if g not in top_two or len(top_two[g]) < 2]
+        if missing:
+            return jsonify({"success": False, "message": f"以下组别积分数据不足2名：{', '.join(missing)}"}), 400
+
+        placements = {}
+        for g in required_groups:
+            placements[f"{g}1"] = int(top_two[g][0]["char_id"])
+            placements[f"{g}2"] = int(top_two[g][1]["char_id"])
+
+        pairs = [
+            ("A1", "B2"),
+            ("C1", "D2"),
+            ("E1", "F2"),
+            ("G1", "H2"),
+            ("B1", "A2"),
+            ("D1", "C2"),
+            ("F1", "E2"),
+            ("H1", "G2"),
+        ]
+
+        insert_payload = []
+        for idx, (left_key, right_key) in enumerate(pairs, start=1):
+            insert_payload.append((
+                "淘汰赛（16进8）",
+                None,
+                idx,
+                placements[left_key],
+                placements[right_key],
+                "pending",
+            ))
+
+        cursor.executemany("""
+            INSERT INTO matches (stage_name, group_name, match_order, char_a_id, char_b_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, insert_payload)
+        conn.commit()
+        return jsonify({"success": True, "message": "淘汰赛（16进8）对阵已生成"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"生成淘汰赛（16进8）对阵失败: {str(e)}")
+        return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+def _knockout_next_stage_name(stage_name: str):
+    mapping = {
+        "淘汰赛（16进8）": "淘汰赛（8进4）",
+        "淘汰赛（8进4）": "半决赛",
+        "半决赛": "总决赛",
+    }
+    return mapping.get(stage_name)
+
+def _knockout_build_next_matches(stage_name: str, matches_with_scores):
+    # matches_with_scores must be ordered in bracket order.
+    winners = []
+    losers = []
+    scored_preview = []
+
+    for m in matches_with_scores:
+        a_votes = int(m["score_a"])
+        b_votes = int(m["score_b"])
+        if a_votes == b_votes:
+            scored_preview.append({**m, "result": "tie"})
+            continue
+        if a_votes > b_votes:
+            winner_id = int(m["char_a_id"])
+            loser_id = int(m["char_b_id"])
+        else:
+            winner_id = int(m["char_b_id"])
+            loser_id = int(m["char_a_id"])
+        winners.append(winner_id)
+        losers.append(loser_id)
+        scored_preview.append({**m, "winner_id": winner_id, "loser_id": loser_id, "result": "ok"})
+
+    if any(x["result"] == "tie" for x in scored_preview):
+        tied = [x["match_id"] for x in scored_preview if x["result"] == "tie"]
+        return {"error": f"存在平票对战，无法结算：{tied}"}
+
+    next_stage = _knockout_next_stage_name(stage_name)
+    if not next_stage:
+        return {"error": f"当前阶段不支持结算：{stage_name}"}
+
+    next_matches = []
+    if stage_name == "淘汰赛（16进8）":
+        if len(winners) != 8:
+            return {"error": "对阵数量不足，无法生成 8 进 4"}
+        pairs = [(0, 1), (2, 3), (4, 5), (6, 7)]
+        for idx, (i, j) in enumerate(pairs, start=1):
+            next_matches.append({
+                "match_order": idx,
+                "char_a_id": winners[i],
+                "char_b_id": winners[j],
+            })
+    elif stage_name == "淘汰赛（8进4）":
+        if len(winners) != 4:
+            return {"error": "对阵数量不足，无法生成半决赛"}
+        pairs = [(0, 1), (2, 3)]
+        for idx, (i, j) in enumerate(pairs, start=1):
+            next_matches.append({
+                "match_order": idx,
+                "char_a_id": winners[i],
+                "char_b_id": winners[j],
+            })
+    elif stage_name == "半决赛":
+        if len(winners) != 2 or len(losers) != 2:
+            return {"error": "对阵数量不足，无法生成总决赛/季军战"}
+        # losers[0] is from match 13, losers[1] from match 14
+        next_matches.append({
+            "match_order": 1,
+            "final_type": "third_place",
+            "char_a_id": losers[0],
+            "char_b_id": losers[1],
+        })
+        next_matches.append({
+            "match_order": 2,
+            "final_type": "championship",
+            "char_a_id": winners[0],
+            "char_b_id": winners[1],
+        })
+
+    return {"next_stage": next_stage, "current_scored": scored_preview, "next_matches": next_matches}
+
+@app.route('/api/admin/knockout/settle_preview', methods=['POST'])
+@admin_required
+def admin_knockout_settle_preview():
+    """根据 system_data.cur_stage 统计票数并预览下一阶段对阵"""
+    conn = get_db()
+    try:
+        cur_stage = _get_system_value(conn, "cur_stage")
+        if not cur_stage:
+            return jsonify({"success": False, "message": "未找到当前阶段（cur_stage）"}), 400
+
+        stage_name = cur_stage
+        if stage_name == "小组赛阶段" or stage_name == "小组赛":
+            return jsonify({"success": False, "message": "当前阶段为小组赛，不适用淘汰赛结算"}), 400
+
+        rows = _fetch_stage_matches_with_scores(conn, stage_name)
+        if not rows:
+            return jsonify({"success": False, "message": f"未找到阶段「{stage_name}」的对阵数据"}), 400
+
+        built = _knockout_build_next_matches(stage_name, rows)
+        if built.get("error"):
+            return jsonify({"success": False, "message": built["error"]}), 400
+
+        # enrich preview with names for next stage matches
+        cursor = conn.cursor()
+        ids = []
+        for m in built["next_matches"]:
+            ids.append(int(m["char_a_id"]))
+            ids.append(int(m["char_b_id"]))
+        placeholders = ",".join(["%s"] * len(ids))
+        cursor.execute(f"SELECT id, name, cn_name, image_url FROM char_data WHERE id IN ({placeholders})", ids)
+        chars = {int(r["id"]): r for r in cursor.fetchall()}
+        cursor.close()
+
+        next_preview = []
+        for idx, m in enumerate(built["next_matches"], start=1):
+            next_preview.append({
+                "match_order": m.get("match_order", idx),
+                "final_type": m.get("final_type"),
+                "char_a": chars.get(int(m["char_a_id"]), {"id": m["char_a_id"], "name": "", "cn_name": "", "image_url": ""}),
+                "char_b": chars.get(int(m["char_b_id"]), {"id": m["char_b_id"], "name": "", "cn_name": "", "image_url": ""}),
+            })
+
+        current_scored = []
+        for m in built["current_scored"]:
+            current_scored.append({
+                "match_id": m["match_id"],
+                "match_order": m.get("match_order"),
+                "char_a": {"id": m["char_a_id"], "name": m["a_name"]},
+                "char_b": {"id": m["char_b_id"], "name": m["b_name"]},
+                "score_a": int(m["score_a"]),
+                "score_b": int(m["score_b"]),
+            })
+
+        return jsonify({
+            "success": True,
+            "current_stage": stage_name,
+            "next_stage": built["next_stage"],
+            "current_matches": current_scored,
+            "next_matches": next_preview,
+        })
+    finally:
+        conn.close()
+
+@app.route('/api/admin/knockout/settle_confirm', methods=['POST'])
+@admin_required
+def admin_knockout_settle_confirm():
+    """结算当前淘汰赛阶段：写入胜者/比分，并生成下一阶段 matches"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cur_stage = _get_system_value(conn, "cur_stage")
+        if not cur_stage:
+            return jsonify({"success": False, "message": "未找到当前阶段（cur_stage）"}), 400
+
+        stage_name = cur_stage
+        next_stage = _knockout_next_stage_name(stage_name)
+        if not next_stage:
+            return jsonify({"success": False, "message": f"当前阶段不支持结算：{stage_name}"}), 400
+
+        # 防重复
+        cursor.execute("SELECT 1 FROM matches WHERE stage_name = %s LIMIT 1", (next_stage,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": f"下一阶段「{next_stage}」对阵已存在，请勿重复结算"}), 400
+
+        rows = _fetch_stage_matches_with_scores(conn, stage_name)
+        if not rows:
+            return jsonify({"success": False, "message": f"未找到阶段「{stage_name}」的对阵数据"}), 400
+
+        built = _knockout_build_next_matches(stage_name, rows)
+        if built.get("error"):
+            return jsonify({"success": False, "message": built["error"]}), 400
+
+        # 更新当前阶段 matches 的比分与胜者
+        update_payload = []
+        for m in built["current_scored"]:
+            a_votes = int(m["score_a"])
+            b_votes = int(m["score_b"])
+            if a_votes == b_votes:
+                return jsonify({"success": False, "message": "存在平票对战，无法结算"}), 400
+            if a_votes > b_votes:
+                winner_id = int(m["char_a_id"])
+            else:
+                winner_id = int(m["char_b_id"])
+            update_payload.append((a_votes, b_votes, winner_id, "completed", m["match_id"]))
+
+        cursor.executemany("""
+            UPDATE matches
+            SET score_a = %s, score_b = %s, winner_id = %s, status = %s, end_time = NOW()
+            WHERE id = %s
+        """, update_payload)
+
+        # 插入下一阶段对阵
+        insert_payload = []
+        for idx, m in enumerate(built["next_matches"], start=1):
+            insert_payload.append((
+                built["next_stage"],
+                m.get("final_type"),
+                None,
+                m.get("match_order", idx),
+                int(m["char_a_id"]),
+                int(m["char_b_id"]),
+                "pending",
+            ))
+
+        cursor.executemany("""
+            INSERT INTO matches (stage_name, final_type, group_name, match_order, char_a_id, char_b_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, insert_payload)
+
+        conn.commit()
+        return jsonify({"success": True, "message": f"结算成功：已生成下一阶段「{built['next_stage']}」对阵"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"淘汰赛结算失败: {str(e)}")
+        return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.route('/api/admin/delete_user_votes', methods=['POST'])
 @admin_required

@@ -70,6 +70,66 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 淘汰赛功能区 -->
+                <div class="card">
+                    <h2>淘汰赛功能区</h2>
+                    <div class="form-row">
+                        <button @click="generateKnockoutPreview" class="admin-btn" :disabled="generatingKnockout">一键分组（淘汰赛）</button>
+                        <button @click="settleKnockoutPreview" class="admin-btn success" :disabled="settlingPreview">票数结算（生成下一轮）</button>
+                    </div>
+
+                    <div v-if="knockoutPreview" class="groups-preview">
+                        <h3>淘汰赛（16进8）对阵预览</h3>
+                        <div v-for="m in knockoutPreview.matches" :key="m.match_order" class="group-box">
+                            <div class="group-title">[[ m.label ]]（[[ m.left_tag ]] vs [[ m.right_tag ]]）</div>
+                            <div class="group-members">
+                                <div class="group-member">
+                                    <span class="member-name">[[ m.char_a.name ]]</span>
+                                    <span class="member-votes">(积分[[ m.char_a.points ]])</span>
+                                </div>
+                                <div class="group-member">
+                                    <span class="member-name">[[ m.char_b.name ]]</span>
+                                    <span class="member-votes">(积分[[ m.char_b.points ]])</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="preview-buttons">
+                            <button @click="cancelKnockoutPreview" class="admin-btn cancel">取消</button>
+                            <button @click="confirmKnockout" class="admin-btn success" :disabled="confirmingKnockout">确认生成</button>
+                        </div>
+                    </div>
+
+                    <div v-if="settlePreview" class="groups-preview">
+                        <h3>票数结算预览</h3>
+                        <p class="info">当前阶段：[[ settlePreview.current_stage ]] → 将生成：[[ settlePreview.next_stage ]]</p>
+                        <div class="group-box">
+                            <div class="group-title">本轮对阵票数</div>
+                            <div class="knockout-matches">
+                                <div v-for="m in settlePreview.current_matches" :key="m.match_id" class="knockout-match-row">
+                                    <span class="knockout-team">[[ m.char_a.name ]]</span>
+                                    <span class="knockout-score">[[ m.score_a ]] : [[ m.score_b ]]</span>
+                                    <span class="knockout-team">[[ m.char_b.name ]]</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="group-box">
+                            <div class="group-title">即将产生的对阵</div>
+                            <div class="knockout-matches">
+                                <div v-for="m in settlePreview.next_matches" :key="m.match_order" class="knockout-match-row">
+                                    <span class="knockout-team">[[ m.char_a.name ]]</span>
+                                    <span class="knockout-score">VS</span>
+                                    <span class="knockout-team">[[ m.char_b.name ]]</span>
+                                    <span v-if="m.final_type" class="member-votes">([[ m.final_type ]])</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="preview-buttons">
+                            <button @click="cancelSettlePreview" class="admin-btn cancel">取消</button>
+                            <button @click="confirmSettleKnockout" class="admin-btn success" :disabled="settlingConfirm">确认结算</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

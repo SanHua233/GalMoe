@@ -127,3 +127,33 @@ h1 {
     gap: 15px;
     justify-content: center;
 }
+
+.knockout-matches {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.knockout-match-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 8px 12px;
+    border-radius: 10px;
+}
+
+.knockout-team {
+    flex: 1;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.knockout-score {
+    width: 90px;
+    text-align: center;
+    color: #475569;
+    font-weight: 700;
+}
