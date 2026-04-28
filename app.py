@@ -1748,7 +1748,9 @@ def reset_all():
 def add_user():
     data = request.json or {}
     qq = data.get('qq_number')
-    nickname = data.get('nickname', '').strip() or None
+    # 修复：安全处理昵称，避免 None.strip() 异常
+    raw_nick = data.get('nickname')
+    nickname = raw_nick.strip() if raw_nick else None
 
     if not qq:
         return jsonify({"success": False, "message": "QQ号不能为空"}), 400
@@ -1760,7 +1762,6 @@ def add_user():
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 检查是否已存在
         cursor.execute("SELECT 1 FROM users WHERE qq_number = %s", (qq_int,))
         if cursor.fetchone():
             return jsonify({"success": False, "message": "该QQ号已注册"}), 400
@@ -1775,6 +1776,179 @@ def add_user():
         conn.rollback()
         app.logger.error(f"添加用户失败: {str(e)}")
         return jsonify({"success": False, "message": f"添加失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+# ------------------- 新增：获取所有用户及投票状态 -------------------
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def get_all_users_vote_status():
+    """获取所有用户列表及各阶段投票状态"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT qq_number, nickname, role FROM users ORDER BY qq_number ASC")
+        users = cursor.fetchall()
+
+        # 阶段定义
+        stages = [
+            ('pre', '预选赛'),
+            ('group', '小组赛'),
+            ('round16', '淘汰赛（16进8）'),
+            ('round8', '淘汰赛（8进4）'),
+            ('semifinal', '半决赛'),
+            ('final', '总决赛')
+        ]
+
+        # 预计算每个用户每个阶段是否有投票
+        from collections import defaultdict
+        pre_voted = set()
+        cursor.execute("SELECT DISTINCT user_qq FROM pre_votes")
+        for r in cursor.fetchall():
+            pre_voted.add(int(r["user_qq"]))
+
+        group_voted = set()
+        cursor.execute("""
+            SELECT DISTINCT mv.user_qq
+            FROM match_votes mv
+            JOIN matches m ON m.id = mv.match_id
+            WHERE m.stage_name = '小组赛'
+        """)
+        for r in cursor.fetchall():
+            group_voted.add(int(r["user_qq"]))
+
+        knockout_voted = defaultdict(set)
+        cursor.execute("""
+            SELECT DISTINCT mv.user_qq, m.stage_name
+            FROM match_votes mv
+            JOIN matches m ON m.id = mv.match_id
+            WHERE m.stage_name LIKE '淘汰赛%' OR m.stage_name IN ('半决赛', '总决赛')
+        """)
+        for r in cursor.fetchall():
+            knockout_voted[r["stage_name"]].add(int(r["user_qq"]))
+
+        result = []
+        for u in users:
+            u_int = int(u["qq_number"])
+            votes = {}
+            votes["pre"] = u_int in pre_voted
+            votes["group"] = u_int in group_voted
+            votes["round16"] = u_int in knockout_voted.get("淘汰赛（16进8）", set())
+            votes["round8"] = u_int in knockout_voted.get("淘汰赛（8进4）", set())
+            votes["semifinal"] = u_int in knockout_voted.get("半决赛", set())
+            votes["final"] = u_int in knockout_voted.get("总决赛", set())
+            result.append({
+                "qq_number": u["qq_number"],
+                "nickname": u.get("nickname"),
+                "role": u["role"],
+                "votes": votes
+            })
+
+        return jsonify({"success": True, "users": result})
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ------------------- 新增：删除用户及其所有投票记录 -------------------
+@app.route('/api/admin/user/<int:qq>', methods=['DELETE'])
+@admin_required
+def delete_user_completely(qq):
+    """删除用户，并清理其所有投票及冗余数据"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM users WHERE qq_number = %s", (qq,))
+        if not cursor.fetchone():
+            return jsonify({"success": False, "message": "用户不存在"}), 404
+
+        # 1. 清理预选赛冗余票数
+        cursor.execute("SELECT char_id FROM pre_votes WHERE user_qq = %s", (qq,))
+        char_ids = [r["char_id"] for r in cursor.fetchall()]
+        if char_ids:
+            cursor.executemany(
+                "UPDATE char_data SET pre_votes_total = pre_votes_total - 1 WHERE id = %s",
+                [(cid,) for cid in char_ids]
+            )
+
+        # 2. 删除预选赛投票
+        cursor.execute("DELETE FROM pre_votes WHERE user_qq = %s", (qq,))
+
+        # 3. 删除小组赛/淘汰赛投票
+        cursor.execute("DELETE FROM match_votes WHERE user_qq = %s", (qq,))
+
+        # 4. 删除用户
+        cursor.execute("DELETE FROM users WHERE qq_number = %s", (qq,))
+
+        conn.commit()
+        return jsonify({"success": True, "message": f"用户 {qq} 已彻底删除，所有投票记录已清理"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"删除用户失败: {str(e)}")
+        return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ------------------- 新增：查看某用户某阶段投票详情 -------------------
+@app.route('/api/admin/user/<int:qq>/votes', methods=['GET'])
+@admin_required
+def get_user_stage_vote_detail(qq):
+    """返回用户某阶段的投票详情"""
+    stage = request.args.get('stage', '').strip()
+    if not stage:
+        return jsonify({"success": False, "message": "缺少阶段参数"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        votes = []
+        if stage == '预选赛':
+            cursor.execute("""
+                SELECT pv.char_id, cd.name AS char_name, cd.cn_name
+                FROM pre_votes pv
+                JOIN char_data cd ON cd.id = pv.char_id
+                WHERE pv.user_qq = %s
+            """, (qq,))
+            votes = cursor.fetchall()
+            votes = [{"id": v["char_id"], "char_name": v["char_name"], "cn_name": v["cn_name"]} for v in votes]
+        else:
+            # 小组赛或淘汰赛
+            if stage == '小组赛':
+                stage_db = '小组赛'
+            else:
+                stage_db = stage  # 作为 stage_name 直接使用
+            cursor.execute("""
+                SELECT
+                    mv.voted_char_id,
+                    m.id AS match_id,
+                    m.char_a_id,
+                    m.char_b_id,
+                    a.name AS char_a_name,
+                    a.cn_name AS char_a_cn,
+                    b.name AS char_b_name,
+                    b.cn_name AS char_b_cn
+                FROM match_votes mv
+                JOIN matches m ON m.id = mv.match_id
+                JOIN char_data a ON a.id = m.char_a_id
+                JOIN char_data b ON b.id = m.char_b_id
+                WHERE mv.user_qq = %s AND m.stage_name = %s
+            """, (qq, stage_db))
+            rows = cursor.fetchall()
+            for r in rows:
+                votes.append({
+                    "match_id": r["match_id"],
+                    "voted_char_id": r["voted_char_id"],
+                    "char_a_id": r["char_a_id"],
+                    "char_b_id": r["char_b_id"],
+                    "char_a_name": r["char_a_name"],
+                    "char_a_cn": r["char_a_cn"] or '',
+                    "char_b_name": r["char_b_name"],
+                    "char_b_cn": r["char_b_cn"] or '',
+                })
+        return jsonify({"success": True, "votes": votes})
     finally:
         cursor.close()
         conn.close()

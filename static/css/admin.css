@@ -181,6 +181,11 @@ h1 {
     box-shadow: 0 8px 24px rgba(0,0,0,0.2);
 }
 
+.modal-box.large-modal {
+    max-width: 1000px;
+    width: 95%;
+}
+
 .modal-box h3 {
     margin-top: 0;
     color: #1e293b;
@@ -199,4 +204,76 @@ h1 {
     border-radius: 4px;
     font-weight: bold;
     color: #ef4444;
+}
+
+/* 用户表格样式 */
+.table-wrapper {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 20px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.user-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.user-table th,
+.user-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: center;
+}
+
+.user-table th {
+    background: #f1f5f9;
+    color: #1e293b;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.user-table td {
+    color: #334155;
+}
+
+.vote-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: default;
+}
+
+.vote-status.voted {
+    color: #059669;
+    background: #d1fae5;
+    cursor: pointer;
+}
+
+.vote-status.voted:hover {
+    background: #a7f3d0;
+}
+
+.vote-status.not-voted {
+    color: #dc2626;
+    background: #fee2e2;
+}
+
+/* 投票详情滚动容器 */
+.vote-detail-scroll {
+    max-height: 60vh;
+    overflow-y: auto;
+    margin: 10px 0;
+    padding-right: 5px;
+}
+
+/* 投票详情行样式 */
+.vote-detail-row {
+    padding: 8px 0;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.9rem;
 }

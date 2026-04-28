@@ -39,6 +39,28 @@ createApp({
             newUserQQ: '',
             newUserNickname: '',
             addUserResult: '',
+
+            // 用户管理
+            targetUserQQ: '',
+            deletingUser: false,
+            userManageMsg: '',
+
+            showUsersModal: false,
+            allUsers: [],
+            loadingUsers: false,
+            voteStages: [
+                { key: 'pre', label: '预选赛' },
+                { key: 'group', label: '小组赛' },
+                { key: 'round16', label: '淘汰赛（16进8）' },
+                { key: 'round8', label: '淘汰赛（8进4）' },
+                { key: 'semifinal', label: '半决赛' },
+                { key: 'final', label: '总决赛' }
+            ],
+
+            showVoteDetailModal: false,
+            voteDetailTitle: '',
+            voteDetailData: [],
+            voteDetailLoading: false,
         }
     },
     mounted() {
@@ -400,6 +422,72 @@ createApp({
                 }
             } catch (e) {
                 alert('请求失败：' + e.message);
+            }
+        },
+
+        // 用户管理：删除用户
+        async deleteTargetUser() {
+            if (!this.targetUserQQ) {
+                alert('请输入用户QQ号');
+                return;
+            }
+            if (!confirm(`确认删除用户 ${this.targetUserQQ} 及其所有投票记录吗？此操作不可撤销。`)) return;
+            this.deletingUser = true;
+            this.userManageMsg = '';
+            try {
+                const res = await fetch(`/api/admin/user/${this.targetUserQQ}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    this.targetUserQQ = '';
+                } else {
+                    alert(data.message);
+                }
+                this.userManageMsg = data.message;
+            } catch (e) {
+                alert('请求失败');
+            } finally {
+                this.deletingUser = false;
+            }
+        },
+
+        // 查看所有用户
+        async fetchAllUsers() {
+            this.loadingUsers = true;
+            try {
+                const res = await fetch('/api/admin/users');
+                const data = await res.json();
+                if (data.success) {
+                    this.allUsers = data.users;
+                    this.showUsersModal = true;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败');
+            } finally {
+                this.loadingUsers = false;
+            }
+        },
+
+        // 查看用户某阶段投票详情
+        async viewUserStageVotes(qq, stageLabel) {
+            this.voteDetailTitle = `用户 ${qq} - ${stageLabel} 投票详情`;
+            this.showVoteDetailModal = true;
+            this.voteDetailLoading = true;
+            this.voteDetailData = [];
+            try {
+                const res = await fetch(`/api/admin/user/${qq}/votes?stage=${encodeURIComponent(stageLabel)}`);
+                const data = await res.json();
+                if (data.success) {
+                    this.voteDetailData = data.votes;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败');
+            } finally {
+                this.voteDetailLoading = false;
             }
         },
     }
