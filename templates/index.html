@@ -336,12 +336,34 @@
             </div>
         </div>
 
-        <!-- 赛制弹窗 -->
+        <!-- 赛制弹窗（更新为完整规则书内容） -->
         <div class="modal" v-if="showRules" @click.self="showRules = false">
-            <div class="modal-content">
+            <div class="modal-content rules-modal-content">
                 <span class="close" @click="showRules = false">&times;</span>
                 <h2>赛制说明</h2>
-                <p>提名 → 预选赛 → 小组赛 → 淘汰赛 → 最终决赛<br>最终决出前三名角色。</p>
+                <div class="rules-body">
+                    <p>赛制流程如下：</p>
+                    <p>提名 → 预选赛 → 小组赛 → 淘汰赛 → 最终决赛</p>
+                    
+                    <h3>预选赛</h3>
+                    <p>每人可选<strong>最多 20 名</strong>角色进行投票</p>
+                    <p>最终按投票数量<strong>最多的 32 名</strong>角色进入小组赛阶段</p>
+                    
+                    <h3>小组赛</h3>
+                    <p>所有角色将根据预选赛的排名进行分组，共分为 8 组，每组 4 名角色</p>
+                    <p>每组中，组内角色进行单循环一对一，不允许弃票，计分规则如下：</p>
+                    <ul>
+                        <li>胜3分</li>
+                        <li>平局1分</li>
+                        <li>负0分</li>
+                    </ul>
+                    <p>每组的前两名晋级淘汰赛</p>
+                    
+                    <h3>淘汰赛</h3>
+                    <p>淘汰赛共包含 4 轮比赛，分别为 16 进 8、8 进 4、半决赛及总决赛（含季军赛）</p>
+                    <p>淘汰赛初始将根据小组赛结果进行分组，同组角色不会出现在同一半区</p>
+                    <p>比赛形式为一对一投票，胜者晋级下一轮，败者淘汰出局</p>
+                </div>
             </div>
         </div>
 
