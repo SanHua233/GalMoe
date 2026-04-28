@@ -1654,6 +1654,130 @@ def clear_group_data():
         conn.close()
         app.logger.error(f"清空小组赛数据失败: {str(e)}")
         return jsonify({"success": False, "message": f"清空失败: {str(e)}"}), 500
+    
+# ------------------- 新增：删除提名角色 -------------------
+@app.route('/api/admin/delete_character', methods=['POST'])
+@admin_required
+def delete_character():
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"success": False, "message": "角色名不能为空"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 1. 查找角色（支持 name 或 cn_name 匹配）
+        cursor.execute(
+            "SELECT id, name, cn_name FROM char_data WHERE name = %s OR cn_name = %s",
+            (name, name)
+        )
+        chars = cursor.fetchall()
+
+        if not chars:
+            return jsonify({"success": False, "message": "未找到该角色信息"}), 404
+
+        if len(chars) > 1:
+            # 有多个同名/别名角色，要求更精确
+            names_preview = ', '.join([f"{c['name']}({c['cn_name']})" for c in chars[:5]])
+            return jsonify({
+                "success": False,
+                "message": f"存在多个匹配角色：{names_preview}，请输入更精确的名称"
+            }), 400
+
+        char_id = chars[0]["id"]
+        char_name = chars[0]["name"]
+        char_cn = chars[0].get("cn_name") or ""
+
+        # 2. 检查该角色是否已参与比赛（matches 表有引用）
+        cursor.execute(
+            "SELECT 1 FROM matches WHERE char_a_id = %s OR char_b_id = %s OR winner_id = %s LIMIT 1",
+            (char_id, char_id, char_id)
+        )
+        if cursor.fetchone():
+            return jsonify({
+                "success": False,
+                "message": f"角色 {char_name}（{char_cn}）已参与比赛，无法删除。请先清空比赛数据"
+            }), 400
+
+        # 3. 执行删除（外键级联会清理 pre_votes 和 group_standings）
+        cursor.execute("DELETE FROM char_data WHERE id = %s", (char_id,))
+        conn.commit()
+        return jsonify({"success": True, "message": f"角色 {char_name}（{char_cn}）已删除"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"删除角色失败: {str(e)}")
+        return jsonify({"success": False, "message": f"操作失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ------------------- 新增：完全重置（清空所有比赛数据） -------------------
+@app.route('/api/admin/reset_all', methods=['POST'])
+@admin_required
+def reset_all():
+    """清空比赛相关所有表（保留 users 和 system_data）"""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 临时关闭外键检查以安全清空
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        cursor.execute("TRUNCATE TABLE match_votes")
+        cursor.execute("TRUNCATE TABLE pre_votes")
+        cursor.execute("TRUNCATE TABLE matches")
+        cursor.execute("TRUNCATE TABLE group_standings")
+        cursor.execute("TRUNCATE TABLE char_data")
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        conn.commit()
+        return jsonify({"success": True, "message": "所有比赛数据已清空，仅保留系统设置和用户表"})
+    except Exception as e:
+        conn.rollback()
+        # 确保外键检查恢复
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        app.logger.error(f"完全重置失败: {str(e)}")
+        return jsonify({"success": False, "message": f"重置失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ------------------- 新增：手动添加用户 -------------------
+@app.route('/api/admin/add_user', methods=['POST'])
+@admin_required
+def add_user():
+    data = request.json or {}
+    qq = data.get('qq_number')
+    nickname = data.get('nickname', '').strip() or None
+
+    if not qq:
+        return jsonify({"success": False, "message": "QQ号不能为空"}), 400
+    try:
+        qq_int = int(qq)
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "QQ号必须为数字"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # 检查是否已存在
+        cursor.execute("SELECT 1 FROM users WHERE qq_number = %s", (qq_int,))
+        if cursor.fetchone():
+            return jsonify({"success": False, "message": "该QQ号已注册"}), 400
+
+        cursor.execute(
+            "INSERT INTO users (qq_number, nickname, role) VALUES (%s, %s, 'user')",
+            (qq_int, nickname)
+        )
+        conn.commit()
+        return jsonify({"success": True, "message": f"用户 {qq_int} 添加成功"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"添加用户失败: {str(e)}")
+        return jsonify({"success": False, "message": f"添加失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
 
 if __name__ == "__main__":
     app.run(debug=True)

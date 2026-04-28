@@ -33,6 +33,29 @@
                     <p class="info">当前阶段：[[ currentStage ]]</p>
                 </div>
 
+                <!-- 提名与数据管理 -->
+                <div class="card">
+                    <h2>提名与数据管理</h2>
+                    <!-- 删除提名 -->
+                    <div class="form-row">
+                        <input v-model="deleteCharName" placeholder="输入角色名（日文或中文）" class="admin-input">
+                        <button @click="deleteCharacter" class="admin-btn danger" :disabled="deletingChar">删除提名角色</button>
+                    </div>
+                    <p class="info" v-if="deleteCharResult">[[ deleteCharResult ]]</p>
+
+                    <hr style="margin: 15px 0; border: none; border-top: 1px solid #e2e8f0;">
+
+                    <!-- 完全重置 -->
+                    <div class="form-row">
+                        <button @click="showResetModal = true" class="admin-btn danger">完全重置（清空所有比赛数据）</button>
+                    </div>
+
+                    <!-- 新增用户 -->
+                    <div class="form-row">
+                        <button @click="showAddUserModal = true" class="admin-btn">新增用户</button>
+                    </div>
+                </div>
+
                 <!-- 删除用户投票 -->
                 <div class="card">
                     <h2>删除用户投票</h2>
@@ -141,6 +164,38 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 完全重置确认模态框 -->
+        <div v-if="showResetModal" class="modal-overlay">
+            <div class="modal-box">
+                <h3>⚠️ 完全重置</h3>
+                <p>此操作将<strong>清空所有比赛数据</strong>（角色、投票、比赛、积分），仅保留系统设置和用户表。操作不可恢复！</p>
+                <p>请在下方输入 <code>确认清除</code> 后点击确认：</p>
+                <input v-model="resetConfirmText" placeholder="请输入“确认清除”" class="admin-input" style="width:100%; margin-bottom:15px;">
+                <div class="modal-buttons">
+                    <button @click="showResetModal = false; resetConfirmText = ''" class="admin-btn cancel">取消</button>
+                    <button @click="executeResetAll" class="admin-btn danger" :disabled="resettingAll || resetConfirmText !== '确认清除'">确认清除</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新增用户模态框 -->
+        <div v-if="showAddUserModal" class="modal-overlay">
+            <div class="modal-box">
+                <h3>新增用户</h3>
+                <div class="form-row">
+                    <input v-model="newUserQQ" placeholder="QQ号" class="admin-input" type="number">
+                </div>
+                <div class="form-row">
+                    <input v-model="newUserNickname" placeholder="昵称（可选）" class="admin-input">
+                </div>
+                <div class="modal-buttons">
+                    <button @click="showAddUserModal = false; newUserQQ = ''; newUserNickname = ''" class="admin-btn cancel">取消</button>
+                    <button @click="submitAddUser" class="admin-btn" :disabled="!newUserQQ">确认添加</button>
+                </div>
+                <p class="info" v-if="addUserResult">[[ addUserResult ]]</p>
             </div>
         </div>
     </div>

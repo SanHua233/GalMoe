@@ -25,6 +25,20 @@ createApp({
             settlePreview: null,
             settlingPreview: false,
             settlingConfirm: false,
+
+            // 新增功能数据
+            deleteCharName: '',
+            deletingChar: false,
+            deleteCharResult: '',
+
+            showResetModal: false,
+            resetConfirmText: '',
+            resettingAll: false,
+
+            showAddUserModal: false,
+            newUserQQ: '',
+            newUserNickname: '',
+            addUserResult: '',
         }
     },
     mounted() {
@@ -54,10 +68,6 @@ createApp({
             const res = await fetch('/me');
             const data = await res.json();
             if (data.logged_in) {
-                // 检查是否是管理员
-                const userRes = await fetch('/api/user/role'); // 需要新增这个接口，或者直接在后端判断
-                // 简单起见，先假设登录即管理员，实际应请求一个检查权限的接口
-                // 这里我们直接尝试访问 admin 页面，如果 403 则说明不是管理员
                 const adminCheck = await fetch('/api/admin/current_stage');
                 if (adminCheck.status === 403) {
                     this.loggedIn = false;
@@ -117,7 +127,6 @@ createApp({
                 const data = await res.json();
                 this.deleteResult = data.message;
                 if (data.success) {
-                    // 可选：刷新分组预览等
                 }
             } catch (e) {
                 this.deleteResult = '请求失败';
@@ -224,7 +233,7 @@ createApp({
                 const data = await res.json();
                 if (data.success) {
                     alert(data.message);
-                    this.groupsPreview = null; // 清空预览
+                    this.groupsPreview = null;
                 } else {
                     alert('清空失败：' + data.message);
                 }
@@ -311,6 +320,86 @@ createApp({
                 alert('请求失败：' + e.message);
             } finally {
                 this.settlingConfirm = false;
+            }
+        },
+
+        // ===== 新增功能方法 =====
+        async deleteCharacter() {
+            const name = this.deleteCharName.trim();
+            if (!name) {
+                alert('请输入需要删除的角色名（日文或中文）');
+                return;
+            }
+            if (!confirm(`确定要删除角色“${name}”吗？此操作不可恢复！`)) return;
+            this.deletingChar = true;
+            this.deleteCharResult = '';
+            try {
+                const res = await fetch('/api/admin/delete_character', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                const data = await res.json();
+                this.deleteCharResult = data.message;
+                if (data.success) {
+                    alert(data.message);
+                    this.deleteCharName = '';
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.deletingChar = false;
+            }
+        },
+
+        async executeResetAll() {
+            if (this.resetConfirmText !== '确认清除') return;
+            if (!confirm('最终确认：即将清空所有角色、投票、比赛数据。此操作不可恢复！')) return;
+            this.resettingAll = true;
+            try {
+                const res = await fetch('/api/admin/reset_all', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    this.showResetModal = false;
+                    this.resetConfirmText = '';
+                    this.fetchCurrentStage();
+                } else {
+                    alert('重置失败：' + data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
+            } finally {
+                this.resettingAll = false;
+            }
+        },
+
+        async submitAddUser() {
+            if (!this.newUserQQ) return;
+            this.addUserResult = '';
+            try {
+                const res = await fetch('/api/admin/add_user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        qq_number: this.newUserQQ,
+                        nickname: this.newUserNickname.trim() || null
+                    })
+                });
+                const data = await res.json();
+                this.addUserResult = data.message;
+                if (data.success) {
+                    alert(data.message);
+                    this.showAddUserModal = false;
+                    this.newUserQQ = '';
+                    this.newUserNickname = '';
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败：' + e.message);
             }
         },
     }
