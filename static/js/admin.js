@@ -26,7 +26,7 @@ createApp({
             settlingPreview: false,
             settlingConfirm: false,
 
-            // 新增功能数据
+            // 提名与数据管理
             deleteCharName: '',
             deletingChar: false,
             deleteCharResult: '',
@@ -35,15 +35,15 @@ createApp({
             resetConfirmText: '',
             resettingAll: false,
 
-            showAddUserModal: false,
-            newUserQQ: '',
-            newUserNickname: '',
-            addUserResult: '',
-
             // 用户管理
             targetUserQQ: '',
             deletingUser: false,
             userManageMsg: '',
+
+            showAddUserModal: false,
+            newUserQQ: '',
+            newUserNickname: '',
+            addUserResult: '',
 
             showUsersModal: false,
             allUsers: [],
@@ -61,6 +61,12 @@ createApp({
             voteDetailTitle: '',
             voteDetailData: [],
             voteDetailLoading: false,
+
+            // 系统参数修改
+            preVotesCurrent: null,
+            showPreVotesModal: false,
+            preVotesNewValue: null,
+            preVotesMsg: '',
         }
     },
     mounted() {
@@ -488,6 +494,45 @@ createApp({
                 alert('请求失败');
             } finally {
                 this.voteDetailLoading = false;
+            }
+        },
+
+        // 系统参数：打开预选赛票数修改框
+        async openPreVotesConfig() {
+            try {
+                const res = await fetch('/api/admin/config/pre_votes');
+                const data = await res.json();
+                if (data.pre_votes_per_user !== undefined) {
+                    this.preVotesCurrent = data.pre_votes_per_user;
+                    this.preVotesNewValue = data.pre_votes_per_user;
+                    this.showPreVotesModal = true;
+                } else {
+                    alert('获取配置失败');
+                }
+            } catch (e) {
+                alert('请求失败');
+            }
+        },
+        // 系统参数：提交新票数
+        async updatePreVotesConfig() {
+            if (!this.preVotesNewValue || this.preVotesNewValue < 1) return;
+            try {
+                const res = await fetch('/api/admin/config/pre_votes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: this.preVotesNewValue })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    this.preVotesCurrent = this.preVotesNewValue;
+                    this.preVotesMsg = data.message;
+                    alert(data.message);
+                    this.showPreVotesModal = false;
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('请求失败');
             }
         },
     }

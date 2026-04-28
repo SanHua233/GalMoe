@@ -1953,5 +1953,44 @@ def get_user_stage_vote_detail(qq):
         cursor.close()
         conn.close()
 
+# ------------------- 系统参数修改 -------------------
+@app.route('/api/admin/config/pre_votes', methods=['GET'])
+@admin_required
+def get_pre_votes_config():
+    """获取预选赛每人最大票数"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT data_value FROM system_data WHERE data_name = 'pre_votes_per_user'")
+    row = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return jsonify({"pre_votes_per_user": int(row["data_value"]) if row else 20})
+
+@app.route('/api/admin/config/pre_votes', methods=['POST'])
+@admin_required
+def update_pre_votes_config():
+    """更新预选赛每人最大票数"""
+    data = request.json or {}
+    new_value = data.get('value')
+    if not isinstance(new_value, int) or new_value < 1:
+        return jsonify({"success": False, "message": "票数必须是大于0的整数"}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE system_data SET data_value = %s WHERE data_name = 'pre_votes_per_user'",
+            (str(new_value),)
+        )
+        conn.commit()
+        return jsonify({"success": True, "message": f"预选赛最大票数已更新为 {new_value}"})
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"更新预选赛票数失败: {str(e)}")
+        return jsonify({"success": False, "message": f"更新失败: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 if __name__ == "__main__":
     app.run(debug=True)

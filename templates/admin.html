@@ -65,6 +65,15 @@
                     <p class="info" v-if="userManageMsg">[[ userManageMsg ]]</p>
                 </div>
 
+                <!-- 系统参数修改 -->
+                <div class="card">
+                    <h2>系统参数修改</h2>
+                    <div class="form-row">
+                        <button @click="openPreVotesConfig" class="admin-btn">修改预选赛票数</button>
+                        <span v-if="preVotesCurrent !== null" class="info">当前每人可投：[[ preVotesCurrent ]] 票</span>
+                    </div>
+                </div>
+
                 <!-- 删除用户投票 -->
                 <div class="card">
                     <h2>删除用户投票</h2>
@@ -250,7 +259,7 @@
             </div>
         </div>
 
-        <!-- 用户某阶段投票详情模态框（修改：添加滚动容器） -->
+        <!-- 用户某阶段投票详情模态框 -->
         <div v-if="showVoteDetailModal" class="modal-overlay">
             <div class="modal-box">
                 <h3>[[ voteDetailTitle ]]</h3>
@@ -273,6 +282,22 @@
                 <div class="modal-buttons">
                     <button @click="showVoteDetailModal = false" class="admin-btn cancel">关闭</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- 修改预选赛票数模态框 -->
+        <div v-if="showPreVotesModal" class="modal-overlay">
+            <div class="modal-box">
+                <h3>修改预选赛每人最大票数</h3>
+                <p>当前值：<strong>[[ preVotesCurrent ]]</strong></p>
+                <div class="form-row">
+                    <input v-model.number="preVotesNewValue" type="number" min="1" placeholder="请输入新票数" class="admin-input">
+                </div>
+                <div class="modal-buttons">
+                    <button @click="showPreVotesModal = false" class="admin-btn cancel">取消</button>
+                    <button @click="updatePreVotesConfig" class="admin-btn success" :disabled="!preVotesNewValue || preVotesNewValue < 1">确认修改</button>
+                </div>
+                <p v-if="preVotesMsg" class="info">[[ preVotesMsg ]]</p>
             </div>
         </div>
     </div>
