@@ -1136,3 +1136,132 @@ body.dark .rules-body h3 {
 .rules-body li {
     margin-bottom: 5px;
 }
+
+/* ================= 移动端适配 ================= */
+@media (max-width: 768px) {
+    /* 导航栏高度自适应 */
+    .navbar {
+        height: auto;
+        flex-wrap: wrap;
+        padding: 12px 15px;
+    }
+
+    /* 显示汉堡按钮，绝对定位在右上角 */
+    .hamburger {
+        display: block;
+        position: absolute;
+        right: 15px;
+        top: 18px;
+        background: none;
+        border: none;
+        color: #f1f5f9;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 10;
+    }
+
+    /* 隐藏原有居中导航，改为全宽下拉菜单 */
+    .nav-center {
+        display: none;
+        position: static;
+        transform: none;
+        width: 100%;
+        flex-direction: column;
+        background: #1e293b;
+        margin-top: 10px;
+        border-radius: 8px;
+        padding: 8px 0;
+        order: 3;
+    }
+
+    .nav-center.mobile-open {
+        display: flex;
+    }
+
+    .nav-item {
+        text-align: center;
+        padding: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        font-size: 16px;
+    }
+
+    .nav-item:last-child {
+        border-bottom: none;
+    }
+
+    /* 右侧用户区向右移动，避免被汉堡遮挡 */
+    .nav-right {
+        margin-right: 45px;
+        font-size: 14px;
+    }
+
+    /* 可隐藏“欢迎您”文字，仅保留按钮（可选） */
+    .nav-right u {
+        display: none;
+    }
+
+    .theme-toggle {
+        font-size: 20px;
+    }
+
+    /* 大信息框宽度自适应 */
+    .large-info-box,
+    .info-box {
+        width: auto;
+        margin-left: 15px;
+        margin-right: 15px;
+    }
+
+    .search-result-modal,
+    .confirm-nomination-modal,
+    .modal-content {
+        width: 90%;
+        max-width: 400px;
+    }
+
+    /* 提名角色列表改为两列 */
+    .characters-list {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* 预选赛卡片改为单列 */
+    .characters-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 小组赛对战卡片改为单列 */
+    .group-matches-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 淘汰赛布局简化 */
+    .knockout-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .knockout-center {
+        grid-column: span 2;
+        order: 3;
+    }
+
+    /* 领奖台改为竖向排列 */
+    .podium {
+        grid-template-columns: 1fr;
+    }
+    .podium-item.gold {
+        order: -1;
+    }
+    .podium-item.silver {
+        order: 0;
+    }
+    .podium-item.bronze {
+        order: 1;
+    }
+}
+
+/* 大屏幕时隐藏汉堡按钮 */
+@media (min-width: 769px) {
+    .hamburger {
+        display: none;
+    }
+}

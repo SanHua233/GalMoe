@@ -15,12 +15,17 @@
             <div class="nav-left">
                 <div class="logo">🌸 GalMoe</div>
             </div>
-            <div class="nav-center">
+            <!-- ★ 汉堡按钮，移动端显示 -->
+            <button class="hamburger" @click="mobileMenuOpen = !mobileMenuOpen">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <!-- ★ 导航菜单，移动端通过 mobile-menu-open 类控制展开 -->
+            <div class="nav-center" :class="{ 'mobile-open': mobileMenuOpen }">
                 <div v-for="stage in stages" 
                     :key="stage"
                     class="nav-item"
                     :class="{ active: currentStage === stage }"
-                    @click="navigateTo(stage)">
+                    @click="mobileMenuOpen = false; navigateTo(stage)">
                     [[ stage ]]
                 </div>
             </div>
@@ -336,7 +341,7 @@
             </div>
         </div>
 
-        <!-- 赛制弹窗（更新为完整规则书内容） -->
+        <!-- 赛制弹窗（完整规则书内容） -->
         <div class="modal" v-if="showRules" @click.self="showRules = false">
             <div class="modal-content rules-modal-content">
                 <span class="close" @click="showRules = false">&times;</span>

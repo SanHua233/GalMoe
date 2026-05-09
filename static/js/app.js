@@ -4,6 +4,7 @@ createApp({
     delimiters: ['[[', ']]'],
     data() {
         return {
+            mobileMenuOpen: false,
             theme: 'light',
             currentStage: '首页',
             dbStage: '',
