@@ -1,7 +1,9 @@
-from flask import Flask, render_template, request, jsonify, session
+﻿from flask import Flask, render_template, request, jsonify, session
 import pymysql
 import requests
 from config import Config
+from flask import Response
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -22,6 +24,33 @@ def get_db():
         database=app.config["MYSQL_DB"],
         cursorclass=pymysql.cursors.DictCursor
     )
+
+@app.route("/api/image_proxy")
+def image_proxy():
+    image_url = (request.args.get("url") or "").strip()
+    if not image_url:
+        return jsonify({"success": False, "message": "缺少图片地址"}), 400
+
+    parsed = urlparse(image_url)
+    if parsed.scheme not in ("http", "https"):
+        return jsonify({"success": False, "message": "不支持的图片协议"}), 400
+
+    try:
+        upstream = requests.get(
+            image_url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0 (GalMoe Image Proxy)"}
+        )
+        upstream.raise_for_status()
+    except requests.RequestException as exc:
+        return jsonify({"success": False, "message": f"获取图片失败: {exc}"}), 502
+
+    response = Response(
+        upstream.content,
+        content_type=upstream.headers.get("Content-Type", "image/jpeg")
+    )
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
 
 @app.route("/api/nominate_character", methods=["POST"])
 def nominate_character():
@@ -727,6 +756,8 @@ def _fetch_stage_matches_with_scores(conn, stage_name: str):
             m.final_type,
             m.group_name,
             m.match_order,
+            m.winner_id,
+            m.status,
             m.char_a_id,
             m.char_b_id,
             a.name AS a_name,
@@ -754,6 +785,43 @@ def _fetch_stage_matches_with_scores(conn, stage_name: str):
         r["score_a"] = int(r["score_a"] or 0)
         r["score_b"] = int(r["score_b"] or 0)
     return rows
+
+def _serialize_knockout_match_row(r):
+    return {
+        "match_id": int(r["match_id"]),
+        "stage_name": r["stage_name"],
+        "final_type": r.get("final_type"),
+        "match_order": int(r["match_order"]) if r.get("match_order") is not None else None,
+        "winner_id": int(r["winner_id"]) if r.get("winner_id") is not None else None,
+        "status": r.get("status") or "pending",
+        "char_a": {
+            "id": int(r["char_a_id"]),
+            "name": r["a_name"],
+            "cn_name": r.get("a_cn_name") or "",
+            "image_url": r.get("a_image_url") or "",
+            "votes": int(r["score_a"] or 0),
+        },
+        "char_b": {
+            "id": int(r["char_b_id"]),
+            "name": r["b_name"],
+            "cn_name": r.get("b_cn_name") or "",
+            "image_url": r.get("b_image_url") or "",
+            "votes": int(r["score_b"] or 0),
+        },
+    }
+
+def _collect_results_matches_by_stage(conn):
+    stage_names = [
+        "淘汰赛（16进8）",
+        "淘汰赛（8进4）",
+        "半决赛",
+        "总决赛",
+    ]
+    matches_by_stage = {}
+    for stage_name in stage_names:
+        rows = _fetch_stage_matches_with_scores(conn, stage_name)
+        matches_by_stage[stage_name] = [_serialize_knockout_match_row(r) for r in rows]
+    return matches_by_stage
 
 def _get_group_top_two(conn):
     cursor = conn.cursor()
@@ -1055,8 +1123,15 @@ def get_results():
     cursor = conn.cursor()
     try:
         cur_stage = _get_system_value(conn, "cur_stage")
+        response = {
+            "success": True,
+            "current_stage": cur_stage or "（未开放）",
+            "finished": False,
+            "matches_by_stage": _collect_results_matches_by_stage(conn),
+            "top3": None,
+        }
         if cur_stage != "（完赛）":
-            return jsonify({"success": True, "finished": False})
+            return jsonify(response)
 
         # 决赛（冠军赛）
         cursor.execute("""
@@ -1074,7 +1149,7 @@ def get_results():
         """)
         final_match = cursor.fetchone()
         if not final_match or not final_match.get("winner_id"):
-            return jsonify({"success": True, "finished": False})
+            return jsonify(response)
 
         champion_id = int(final_match["winner_id"])
         a_id = int(final_match["char_a_id"])
@@ -1097,7 +1172,7 @@ def get_results():
         """)
         third_match = cursor.fetchone()
         if not third_match or not third_match.get("winner_id"):
-            return jsonify({"success": True, "finished": False})
+            return jsonify(response)
 
         third_id = int(third_match["winner_id"])
 
@@ -1106,15 +1181,13 @@ def get_results():
         cursor.execute(f"SELECT id, name, cn_name, image_url FROM char_data WHERE id IN ({placeholders})", ids)
         chars = {int(r["id"]): r for r in cursor.fetchall()}
 
-        return jsonify({
-            "success": True,
-            "finished": True,
-            "top3": {
-                "champion": chars.get(champion_id),
-                "runner_up": chars.get(runner_up_id),
-                "third": chars.get(third_id),
-            }
-        })
+        response["finished"] = True
+        response["top3"] = {
+            "champion": chars.get(champion_id),
+            "runner_up": chars.get(runner_up_id),
+            "third": chars.get(third_id),
+        }
+        return jsonify(response)
     finally:
         cursor.close()
         conn.close()
@@ -2022,3 +2095,4 @@ def update_pre_votes_config():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
