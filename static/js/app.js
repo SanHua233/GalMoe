@@ -66,7 +66,13 @@ createApp({
             showResultsPage: false,
             resultsLoading: false,
             resultsFinished: false,
-            resultsTop3: null
+            resultsCompleted: false,
+            resultsTop3: null,
+            resultsCurrentStage: '',
+            resultsMatchesByStage: {},
+            resultsRefreshTimer: null,
+            resultsConnectorPaths: [],
+            resultsConnectorViewBox: '0 0 0 0'
         }
     },
     computed: {
@@ -90,6 +96,31 @@ createApp({
         },
         knockoutMatches() {
             return this.knockoutMatchesByTab[this.knockoutActiveTab] || [];
+        },
+        resultsHasBracketData() {
+            const matchesByStage = this.resultsMatchesByStage || {};
+            return Object.values(matchesByStage).some(list => Array.isArray(list) && list.length > 0);
+        },
+        resultsBracket() {
+            const round16 = this.getResultsStageMatches('淘汰赛（16进8）');
+            const round8 = this.getResultsStageMatches('淘汰赛（8进4）');
+            const semifinal = this.getResultsStageMatches('半决赛');
+            const finalStage = this.getResultsStageMatches('总决赛');
+
+            return {
+                left: {
+                    round16: this.normalizeBracketMatches(round16.slice(0, 4), 4, 'left-r16'),
+                    round8: this.normalizeBracketMatches(round8.slice(0, 2), 2, 'left-r8'),
+                    semifinal: this.normalizeBracketMatches(semifinal.slice(0, 1), 1, 'left-sf'),
+                },
+                right: {
+                    round16: this.normalizeBracketMatches(round16.slice(4, 8), 4, 'right-r16'),
+                    round8: this.normalizeBracketMatches(round8.slice(2, 4), 2, 'right-r8'),
+                    semifinal: this.normalizeBracketMatches(semifinal.slice(1, 2), 1, 'right-sf'),
+                },
+                final: this.normalizeBracketMatches(finalStage.filter(m => m.final_type === 'championship'), 1, 'championship')[0],
+                thirdPlace: this.normalizeBracketMatches(finalStage.filter(m => m.final_type === 'third_place'), 1, 'third-place')[0],
+            };
         }
     },
     mounted() {
@@ -213,29 +244,242 @@ createApp({
         },
 
         async loadResults() {
+            this.showKnockoutVoteConfirm = false;
+            this.showGroupVoteConfirm = false;
             this.resultsLoading = true;
-            this.resultsFinished = false;
-            this.resultsTop3 = null;
             try {
                 const res = await fetch("/api/results");
                 const data = await res.json();
-                if (data.success && data.finished) {
-                    this.resultsFinished = true;
+                if (data.success) {
+                    const matchesByStage = data.matches_by_stage || {};
+                    const hasMatches = Object.values(matchesByStage).some(list => Array.isArray(list) && list.length > 0);
+                    this.resultsCurrentStage = data.current_stage || this.dbStage || '';
+                    this.resultsMatchesByStage = matchesByStage;
+                    this.resultsCompleted = !!data.finished;
+                    this.resultsFinished = hasMatches || !!data.finished;
                     this.resultsTop3 = data.top3 || null;
+                    if (data.current_stage) {
+                        this.dbStage = data.current_stage;
+                    }
                 } else {
                     this.resultsFinished = false;
+                    this.resultsCompleted = false;
                     this.resultsTop3 = null;
+                    this.resultsCurrentStage = '';
+                    this.resultsMatchesByStage = {};
                 }
             } catch (e) {
                 console.error("获取赛事结果失败:", e);
                 this.resultsFinished = false;
+                this.resultsCompleted = false;
                 this.resultsTop3 = null;
+                this.resultsCurrentStage = '';
+                this.resultsMatchesByStage = {};
             } finally {
                 this.resultsLoading = false;
             }
         },
 
+        async exportResultsImage() {
+            const target = this.$refs.resultsBracketBoard;
+            if (!target) {
+                alert('未找到可导出的对阵图区');
+                return;
+            }
+            if (typeof window.html2canvas !== 'function') {
+                alert('导出组件加载失败，请刷新页面后重试');
+                return;
+            }
+
+            this.resultsExporting = true;
+            try {
+                const exportWidth = Math.max(
+                    1700,
+                    Math.ceil(target.scrollWidth),
+                    Math.ceil(target.getBoundingClientRect().width)
+                );
+                const exportHost = document.createElement('div');
+                exportHost.style.position = 'fixed';
+                exportHost.style.left = '-100000px';
+                exportHost.style.top = '0';
+                exportHost.style.width = `${exportWidth}px`;
+                exportHost.style.padding = '16px 20px 24px';
+                exportHost.style.boxSizing = 'border-box';
+                exportHost.style.background = this.theme === 'dark' ? '#0f172a' : '#f8fbff';
+                exportHost.style.pointerEvents = 'none';
+                exportHost.style.zIndex = '-1';
+
+                const clone = target.cloneNode(true);
+                clone.style.width = `${exportWidth - 40}px`;
+                clone.style.minWidth = `${exportWidth - 40}px`;
+                clone.style.maxWidth = 'none';
+                clone.style.margin = '0';
+                clone.style.padding = '8px 0 20px';
+                clone.style.overflow = 'visible';
+                exportHost.appendChild(clone);
+                document.body.appendChild(exportHost);
+
+                await this.waitForExportImages(exportHost);
+
+                const canvas = await window.html2canvas(exportHost, {
+                    backgroundColor: this.theme === 'dark' ? '#0f172a' : '#f8fbff',
+                    useCORS: true,
+                    allowTaint: false,
+                    scale: Math.max(2, Math.ceil(window.devicePixelRatio || 1)),
+                    width: Math.ceil(exportHost.scrollWidth),
+                    height: Math.ceil(exportHost.scrollHeight),
+                    windowWidth: exportWidth,
+                    windowHeight: Math.ceil(exportHost.scrollHeight),
+                    scrollX: 0,
+                    scrollY: 0,
+                    logging: false
+                });
+                document.body.removeChild(exportHost);
+
+                const pngBlob = await new Promise((resolve, reject) => {
+                    canvas.toBlob(result => {
+                        if (result) {
+                            resolve(result);
+                        } else {
+                            reject(new Error('PNG conversion failed'));
+                        }
+                    }, 'image/png');
+                });
+
+                const pngUrl = URL.createObjectURL(pngBlob);
+                const link = document.createElement('a');
+                link.href = pngUrl;
+                link.download = `galmoe-bracket-${new Date().toISOString().slice(0, 10)}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                setTimeout(() => {
+                    URL.revokeObjectURL(pngUrl);
+                }, 1000);
+            } catch (error) {
+                console.error('导出结果图失败:', error);
+                alert('导出图片失败，请稍后重试');
+            } finally {
+                const staleHost = document.querySelector('body > div[style*="-100000px"]');
+                if (staleHost) staleHost.remove();
+                this.resultsExporting = false;
+            }
+        },
+
+        async waitForExportImages(container) {
+            const images = Array.from(container.querySelectorAll('img'));
+            await Promise.all(images.map((img) => {
+                if (img.complete && img.naturalWidth > 0) {
+                    return Promise.resolve();
+                }
+                img.loading = 'eager';
+                img.decoding = 'sync';
+                return new Promise((resolve) => {
+                    const done = () => resolve();
+                    img.addEventListener('load', done, { once: true });
+                    img.addEventListener('error', done, { once: true });
+                });
+            }));
+        },
+
+        startResultsAutoRefresh() {
+            if (this.resultsRefreshTimer) return;
+            this.resultsRefreshTimer = setInterval(() => {
+                if (!this.showResultsPage) return;
+                this.loadResults();
+            }, 10000);
+        },
+
+        stopResultsAutoRefresh() {
+            if (!this.resultsRefreshTimer) return;
+            clearInterval(this.resultsRefreshTimer);
+            this.resultsRefreshTimer = null;
+        },
+
+        getResultsStageMatches(stageName) {
+            return this.resultsMatchesByStage?.[stageName] || [];
+        },
+
+        normalizeBracketMatches(matches, count, prefix) {
+            const normalized = Array.isArray(matches) ? matches.slice(0, count) : [];
+            while (normalized.length < count) {
+                normalized.push(this.createPlaceholderBracketMatch(`${prefix}-${normalized.length + 1}`));
+            }
+            return normalized;
+        },
+
+        createPlaceholderBracketMatch(key) {
+            return {
+                match_id: `placeholder-${key}`,
+                stage_name: '',
+                final_type: null,
+                match_order: null,
+                winner_id: null,
+                status: 'pending',
+                is_placeholder: true,
+                char_a: { id: null, name: '待定', cn_name: '', image_url: '', votes: null },
+                char_b: { id: null, name: '待定', cn_name: '', image_url: '', votes: null },
+            };
+        },
+
+        isResultsCurrentStage(stageName) {
+            return this.resultsCurrentStage === stageName;
+        },
+
+        getResultsStageState(stageName) {
+            const current = this.stageOrderIndex(this.resultsCurrentStage || this.dbStage);
+            const target = this.stageOrderIndex(stageName);
+            if (current === -1 || target === -1) return 'pending';
+            if (current < target) return 'pending';
+            if (current > target) return 'finished';
+            return 'active';
+        },
+
+        getResultsMatchState(match) {
+            if (!match || match.is_placeholder) return 'placeholder';
+            if (match.winner_id) return 'finished';
+            const stageState = this.getResultsStageState(match.stage_name);
+            if (stageState === 'finished') return 'finished';
+            if (stageState === 'active') return 'active';
+            return 'pending';
+        },
+
+        getResultsImageSrc(imageUrl) {
+            if (!imageUrl) return '';
+            if (imageUrl.startsWith('/api/image_proxy?url=')) return imageUrl;
+            return `/api/image_proxy?url=${encodeURIComponent(imageUrl)}`;
+        },
+
+        getResultsMatchScore(match) {
+            if (!match || match.is_placeholder) return '';
+            const aVotes = Number(match.char_a?.votes || 0);
+            const bVotes = Number(match.char_b?.votes || 0);
+            return `${aVotes} : ${bVotes}`;
+        },
+
+        getResultsParticipantClass(match, participant) {
+            if (!match || match.is_placeholder) return 'is-empty';
+            const participantId = match[participant]?.id;
+            const aVotes = Number(match.char_a?.votes || 0);
+            const bVotes = Number(match.char_b?.votes || 0);
+            if (match.winner_id && participantId === match.winner_id) {
+                return 'is-winner';
+            }
+            if (this.getResultsMatchState(match) === 'active') {
+                if (participant === 'char_a' && aVotes > bVotes) return 'is-leading';
+                if (participant === 'char_b' && bVotes > aVotes) return 'is-leading';
+            }
+            return '';
+        },
+
         navigateTo(stage) {
+            this.stopResultsAutoRefresh();
+            this.showKnockoutVoteConfirm = false;
+            this.showGroupVoteConfirm = false;
+            if (stage !== '璧涗簨缁撴灉') {
+                this.resultsConnectorPaths = [];
+                this.resultsConnectorViewBox = '0 0 0 0';
+            }
             // 先刷新阶段信息（异步）
             this.fetchCurrentStage().then(() => {
                 if (stage === '首页') {

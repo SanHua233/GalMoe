@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
 <body>
-    <div id="app">
+    <div id="app" v-cloak>
         <!-- 导航栏 -->
         <div class="navbar">
             <div class="nav-left">
@@ -62,7 +62,7 @@
 
         <!-- 提名页面 -->
         <div v-if="showNominationPage" class="nomination-page">
-            <div class="info-box large-info-box">
+            <div class="info-box large-info-box results-board-panel">
                 <h2>角色搜索</h2>
                 <div class="search-box">
                     <input v-model="searchKeyword" placeholder="搜索角色" @keyup.enter="searchCharacters">
@@ -71,7 +71,7 @@
                     </div>
                 </div>
             </div>
-            <div class="info-box large-info-box">
+            <div class="info-box large-info-box results-board-panel">
                 <h2>现有提名角色</h2>
                 <div class="characters-list">
                     <div v-for="(character, index) in characters" :key="index" class="character-card">
@@ -304,41 +304,256 @@
                 </div>
             </div>
         </div>
-
         <!-- 赛事结果页面 -->
         <div v-if="showResultsPage" class="results-page">
-            <div class="info-box large-info-box">
+            <div class="info-box large-info-box results-board-panel">
                 <h2>赛事结果</h2>
-                <div v-if="resultsLoading" class="rank-placeholder">加载中...</div>
-                <div v-else-if="!resultsFinished" class="rank-placeholder">赛事尚未结束，请耐心等待投票结果</div>
-                <div v-else class="podium">
-                    <div class="podium-item silver">
-                        <div class="podium-rank">亚军</div>
-                        <div class="podium-card">
-                            <img v-if="resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.image_url" :src="resultsTop3.runner_up.image_url" class="podium-avatar">
-                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
-                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.name) || '' ]]</div>
-                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.runner_up && resultsTop3.runner_up.cn_name && resultsTop3.runner_up.cn_name !== '无中文名'">[[ resultsTop3.runner_up.cn_name ]]</div>
+                <div v-if="resultsLoading && !resultsFinished && !resultsHasBracketData" class="rank-placeholder">加载中...</div>
+                <div v-else-if="!resultsFinished" class="rank-placeholder">赛事尚未进入淘汰赛阶段，请耐心等待结果更新</div>
+                <div v-else class="results-content">
+                     <div v-if="resultsCompleted && resultsTop3" class="podium results-podium-above">
+                         <div class="podium-item silver">
+                             <div class="podium-rank">亚军</div>
+                             <div class="podium-card">
+                                 <img v-if="resultsTop3.runner_up && resultsTop3.runner_up.image_url" :src="resultsTop3.runner_up.image_url" class="podium-avatar">
+                                 <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                 <div class="podium-name">[[ (resultsTop3.runner_up && resultsTop3.runner_up.name) || '' ]]</div>
+                                 <div class="podium-cnname" v-if="resultsTop3.runner_up && resultsTop3.runner_up.cn_name && resultsTop3.runner_up.cn_name !== '无中文名'">[[ resultsTop3.runner_up.cn_name ]]</div>
+                             </div>
+                         </div>
+
+                         <div class="podium-item gold">
+                             <div class="podium-rank">冠军</div>
+                             <div class="podium-card">
+                                 <img v-if="resultsTop3.champion && resultsTop3.champion.image_url" :src="resultsTop3.champion.image_url" class="podium-avatar">
+                                 <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                 <div class="podium-name">[[ (resultsTop3.champion && resultsTop3.champion.name) || '' ]]</div>
+                                 <div class="podium-cnname" v-if="resultsTop3.champion && resultsTop3.champion.cn_name && resultsTop3.champion.cn_name !== '无中文名'">[[ resultsTop3.champion.cn_name ]]</div>
+                             </div>
+                         </div>
+
+                         <div class="podium-item bronze">
+                             <div class="podium-rank">季军</div>
+                             <div class="podium-card">
+                                 <img v-if="resultsTop3.third && resultsTop3.third.image_url" :src="resultsTop3.third.image_url" class="podium-avatar">
+                                 <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                 <div class="podium-name">[[ (resultsTop3.third && resultsTop3.third.name) || '' ]]</div>
+                                 <div class="podium-cnname" v-if="resultsTop3.third && resultsTop3.third.cn_name && resultsTop3.third.cn_name !== '无中文名'">[[ resultsTop3.third.cn_name ]]</div>
+                             </div>
+                         </div>
+                     </div>
+
+                    <div class="results-toolbar">
+                        <div class="results-toolbar-copy">
+                            <div class="results-toolbar-title">淘汰赛对阵图</div>
+                            <div class="results-toolbar-note">结果页默认不自动刷新，点击右侧按钮后再同步最新票数。</div>
+                        </div>
+                         <div class="results-actions">
+                             <div class="results-stage-banner">
+                                 <div class="results-stage-label">当前阶段</div>
+                                 <div class="results-stage-pill">[[ resultsCurrentStage || dbStage || '未开放' ]]</div>
+                             </div>
+                             <button type="button" class="results-refresh-btn" @click="loadResults" :disabled="resultsLoading">
+                                 [[ resultsLoading ? '刷新中...' : '刷新票数' ]]
+                             </button>
+                         </div>
+                     </div>
+
+                     <div v-if="!resultsHasBracketData" class="rank-placeholder">淘汰赛对阵尚未生成，请等待赛程推进</div>
+                     <div v-else class="results-mobile-bracket-note">移动端暂不展示淘汰赛对阵图，请在电脑端查看完整对阵。</div>
+                     <div v-if="resultsHasBracketData" class="bracket-shell">
+                         <div class="bracket-layout">
+                             <div class="bracket-column bracket-column-left bracket-column-round16">
+                                 <div class="bracket-round-title">16进8</div>
+                                 <div class="bracket-match-stack dense stack-merge stack-merge-tight">
+                                     <div v-for="match in resultsBracket.left.round16" :key="'left-r16-' + match.match_id" class="bracket-match-card bracket-match-left" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                            <div class="bracket-column bracket-column-left bracket-column-round8">
+                                <div class="bracket-round-title">8进4</div>
+                                <div class="bracket-match-stack medium stack-merge stack-merge-medium bracket-column-offset-sm">
+                                     <div v-for="match in resultsBracket.left.round8" :key="'left-r8-' + match.match_id" class="bracket-match-card bracket-match-left" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                            <div class="bracket-column bracket-column-left bracket-column-semifinal">
+                                <div class="bracket-round-title">半决赛</div>
+                                <div class="bracket-match-stack wide bracket-column-offset-lg">
+                                     <div v-for="match in resultsBracket.left.semifinal" :key="'left-sf-' + match.match_id" class="bracket-match-card bracket-match-left" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                             <div class="bracket-column bracket-column-finals">
+                                 <div class="bracket-center-block bracket-center-block-final">
+                                     <div class="bracket-round-title bracket-round-title-final">总决赛</div>
+                                     <div class="bracket-match-card bracket-match-final" :class="getResultsMatchState(resultsBracket.final)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(resultsBracket.final, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!resultsBracket.final.is_placeholder && resultsBracket.final.char_a.image_url" :src="getResultsImageSrc(resultsBracket.final.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ resultsBracket.final.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!resultsBracket.final.is_placeholder" class="bracket-slot-votes">[[ resultsBracket.final.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(resultsBracket.final, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!resultsBracket.final.is_placeholder && resultsBracket.final.char_b.image_url" :src="getResultsImageSrc(resultsBracket.final.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ resultsBracket.final.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!resultsBracket.final.is_placeholder" class="bracket-slot-votes">[[ resultsBracket.final.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                                 <div class="bracket-center-block bracket-center-block-third">
+                                     <div class="bracket-round-title bracket-round-title-third">季军赛</div>
+                                     <div class="bracket-match-card bracket-match-third" :class="getResultsMatchState(resultsBracket.thirdPlace)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(resultsBracket.thirdPlace, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!resultsBracket.thirdPlace.is_placeholder && resultsBracket.thirdPlace.char_a.image_url" :src="getResultsImageSrc(resultsBracket.thirdPlace.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ resultsBracket.thirdPlace.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!resultsBracket.thirdPlace.is_placeholder" class="bracket-slot-votes">[[ resultsBracket.thirdPlace.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(resultsBracket.thirdPlace, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!resultsBracket.thirdPlace.is_placeholder && resultsBracket.thirdPlace.char_b.image_url" :src="getResultsImageSrc(resultsBracket.thirdPlace.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ resultsBracket.thirdPlace.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!resultsBracket.thirdPlace.is_placeholder" class="bracket-slot-votes">[[ resultsBracket.thirdPlace.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                            <div class="bracket-column bracket-column-right bracket-column-semifinal">
+                                <div class="bracket-round-title">半决赛</div>
+                                <div class="bracket-match-stack wide bracket-column-offset-lg">
+                                     <div v-for="match in resultsBracket.right.semifinal" :key="'right-sf-' + match.match_id" class="bracket-match-card bracket-match-right" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                            <div class="bracket-column bracket-column-right bracket-column-round8">
+                                <div class="bracket-round-title">8进4</div>
+                                <div class="bracket-match-stack medium stack-merge stack-merge-medium bracket-column-offset-sm">
+                                     <div v-for="match in resultsBracket.right.round8" :key="'right-r8-' + match.match_id" class="bracket-match-card bracket-match-right" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+
+                            <div class="bracket-column bracket-column-right bracket-column-round16">
+                                <div class="bracket-round-title">16进8</div>
+                                <div class="bracket-match-stack dense stack-merge stack-merge-tight">
+                                     <div v-for="match in resultsBracket.right.round16" :key="'right-r16-' + match.match_id" class="bracket-match-card bracket-match-right" :class="getResultsMatchState(match)">
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_a')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_a.image_url" :src="getResultsImageSrc(match.char_a.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_a.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_a.votes ]]</div>
+                                         </div>
+                                         <div class="bracket-slot" :class="getResultsParticipantClass(match, 'char_b')">
+                                             <div class="bracket-slot-main">
+                                                 <img v-if="!match.is_placeholder && match.char_b.image_url" :src="getResultsImageSrc(match.char_b.image_url)" class="bracket-slot-avatar">
+                                                 <div v-else class="bracket-slot-avatar placeholder"><i class="fa-solid fa-user"></i></div>
+                                                 <div class="bracket-slot-name">[[ match.char_b.name ]]</div>
+                                             </div>
+                                             <div v-if="!match.is_placeholder" class="bracket-slot-votes">[[ match.char_b.votes ]]</div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
                         </div>
                     </div>
-                    <div class="podium-item gold">
-                        <div class="podium-rank">冠军</div>
-                        <div class="podium-card">
-                            <img v-if="resultsTop3 && resultsTop3.champion && resultsTop3.champion.image_url" :src="resultsTop3.champion.image_url" class="podium-avatar">
-                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
-                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.champion && resultsTop3.champion.name) || '' ]]</div>
-                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.champion && resultsTop3.champion.cn_name && resultsTop3.champion.cn_name !== '无中文名'">[[ resultsTop3.champion.cn_name ]]</div>
-                        </div>
-                    </div>
-                    <div class="podium-item bronze">
-                        <div class="podium-rank">季军</div>
-                        <div class="podium-card">
-                            <img v-if="resultsTop3 && resultsTop3.third && resultsTop3.third.image_url" :src="resultsTop3.third.image_url" class="podium-avatar">
-                            <div v-else class="podium-avatar placeholder"><i class="fa-solid fa-user"></i></div>
-                            <div class="podium-name">[[ (resultsTop3 && resultsTop3.third && resultsTop3.third.name) || '' ]]</div>
-                            <div class="podium-cnname" v-if="resultsTop3 && resultsTop3.third && resultsTop3.third.cn_name && resultsTop3.third.cn_name !== '无中文名'">[[ resultsTop3.third.cn_name ]]</div>
-                        </div>
-                    </div>
+
                 </div>
             </div>
         </div>
