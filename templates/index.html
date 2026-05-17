@@ -227,6 +227,7 @@
                             <div class="col-rank">#</div>
                             <div class="col-name">角色</div>
                             <div class="col-p">积分</div>
+                            <div class="col-net">净胜票数</div>
                             <div class="col-wdl">胜/平/负</div>
                         </div>
                         <div v-for="(row, idx) in rows" :key="row.id" class="standings-row">
@@ -235,6 +236,7 @@
                                 <span :class="idx < 2 ? 'text-advance' : 'text-eliminate'">[[ row.name ]]</span>
                             </div>
                             <div class="col-p">[[ row.points ]]</div>
+                            <div class="col-net">[[ row.net_votes ]]</div>
                             <div class="col-wdl">[[ row.wins ]]/[[ row.draws ]]/[[ row.losses ]]</div>
                         </div>
                     </div>

@@ -439,6 +439,7 @@ def _compute_group_stage_standings(match_rows):
         rows = []
         for char_id, s in group_stats.items():
             s["goal_diff"] = int(s["goals_for"]) - int(s["goals_against"])
+            s["net_votes"] = s["goal_diff"]
             meta = char_meta.get(char_id, {"id": char_id, "name": "", "cn_name": "", "image_url": ""})
             rows.append({
                 **meta,
@@ -448,6 +449,27 @@ def _compute_group_stage_standings(match_rows):
         rows.sort(key=lambda x: (-x["points"], -x["goal_diff"], -x["goals_for"], x["name"]))
         result[group_name] = rows
     return result
+
+def _refresh_group_stage_standings_cache(conn):
+    match_rows = _fetch_group_stage_matches_with_scores(conn)
+    standings_by_group = _compute_group_stage_standings(match_rows)
+    _ensure_group_standings_net_votes_column(conn)
+    _sync_group_stage_caches(conn, match_rows, standings_by_group)
+    return standings_by_group
+
+def _ensure_group_standings_net_votes_column(conn):
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SHOW COLUMNS FROM group_standings LIKE 'net_votes'")
+        if cursor.fetchone():
+            return
+        cursor.execute("""
+            ALTER TABLE group_standings
+            ADD COLUMN net_votes int NOT NULL DEFAULT 0 COMMENT '净胜票数（得票-失票）' AFTER goal_diff
+        """)
+        conn.commit()
+    finally:
+        cursor.close()
 
 def _sync_group_stage_caches(conn, match_rows, standings_by_group):
     cursor = conn.cursor()
@@ -461,9 +483,9 @@ def _sync_group_stage_caches(conn, match_rows, standings_by_group):
         # upsert standings
         upsert_sql = """
             INSERT INTO group_standings
-                (group_name, char_id, played, wins, draws, losses, points, goal_diff, goals_for, goals_against)
+                (group_name, char_id, played, wins, draws, losses, points, goal_diff, net_votes, goals_for, goals_against)
             VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 played = VALUES(played),
                 wins = VALUES(wins),
@@ -471,6 +493,7 @@ def _sync_group_stage_caches(conn, match_rows, standings_by_group):
                 losses = VALUES(losses),
                 points = VALUES(points),
                 goal_diff = VALUES(goal_diff),
+                net_votes = VALUES(net_votes),
                 goals_for = VALUES(goals_for),
                 goals_against = VALUES(goals_against)
         """
@@ -486,6 +509,7 @@ def _sync_group_stage_caches(conn, match_rows, standings_by_group):
                     r["losses"],
                     r["points"],
                     r["goal_diff"],
+                    r["net_votes"],
                     r["goals_for"],
                     r["goals_against"],
                 ))
@@ -538,10 +562,9 @@ def get_group_stage_standings():
     """获取小组赛实时积分榜（按组返回）"""
     conn = get_db()
     try:
-        match_rows = _fetch_group_stage_matches_with_scores(conn)
-        if not match_rows:
+        standings_by_group = _refresh_group_stage_standings_cache(conn)
+        if not standings_by_group:
             return jsonify({"success": False, "message": "小组赛对战尚未生成，请联系管理员生成分组"}), 400
-        standings_by_group = _compute_group_stage_standings(match_rows)
         ordered = {}
         for group_name in sorted(standings_by_group.keys()):
             ordered[group_name] = standings_by_group[group_name]
@@ -740,6 +763,7 @@ def _get_group_top_two(conn):
             gs.char_id,
             gs.points,
             gs.goal_diff,
+            gs.goal_diff AS net_votes,
             gs.goals_for,
             c.name,
             c.cn_name,
@@ -749,6 +773,7 @@ def _get_group_top_two(conn):
         ORDER BY
             gs.group_name ASC,
             gs.points DESC,
+            gs.net_votes DESC,
             gs.goal_diff DESC,
             gs.goals_for DESC,
             gs.char_id ASC
@@ -817,6 +842,7 @@ def admin_generate_knockout_preview():
         if not has_rows:
             return jsonify({"success": False, "message": "未找到小组赛积分数据，请先生成并完成小组赛投票"}), 400
 
+        _refresh_group_stage_standings_cache(conn)
         top_two = _get_group_top_two(conn)
         required_groups = [chr(65 + i) for i in range(8)]  # A-H
         missing = [g for g in required_groups if g not in top_two or len(top_two[g]) < 2]
@@ -855,6 +881,7 @@ def admin_generate_knockout_preview():
                     "image_url": left.get("image_url") or "",
                     "points": int(left["points"]),
                     "goal_diff": int(left["goal_diff"]),
+                    "net_votes": int(left["net_votes"]),
                     "goals_for": int(left["goals_for"]),
                 },
                 "char_b": {
@@ -864,6 +891,7 @@ def admin_generate_knockout_preview():
                     "image_url": right.get("image_url") or "",
                     "points": int(right["points"]),
                     "goal_diff": int(right["goal_diff"]),
+                    "net_votes": int(right["net_votes"]),
                     "goals_for": int(right["goals_for"]),
                 },
             })

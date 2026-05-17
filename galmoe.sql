@@ -85,12 +85,13 @@ CREATE TABLE `group_standings`  (
   `losses` tinyint NOT NULL DEFAULT 0 COMMENT '负场',
   `points` tinyint NOT NULL DEFAULT 0 COMMENT '积分（胜3平1负0）',
   `goal_diff` int NOT NULL DEFAULT 0 COMMENT '得票差（得票-失票）',
+  `net_votes` int NOT NULL DEFAULT 0 COMMENT '净胜票数（得票-失票）',
   `goals_for` int NOT NULL DEFAULT 0 COMMENT '总得票数',
   `goals_against` int NOT NULL DEFAULT 0 COMMENT '总失票数',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_group_char`(`group_name` ASC, `char_id` ASC) USING BTREE,
   INDEX `idx_char`(`char_id` ASC) USING BTREE,
-  INDEX `idx_group_points`(`group_name` ASC, `points` DESC, `goal_diff` DESC, `goals_for` DESC) USING BTREE,
+  INDEX `idx_group_points`(`group_name` ASC, `points` DESC, `net_votes` DESC, `goal_diff` DESC, `goals_for` DESC) USING BTREE,
   CONSTRAINT `fk_standings_char` FOREIGN KEY (`char_id`) REFERENCES `char_data` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
 ) ENGINE = InnoDB AUTO_INCREMENT = 130 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '小组赛积分榜（冗余，每场比赛后更新）' ROW_FORMAT = DYNAMIC;
 
