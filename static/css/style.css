@@ -227,6 +227,7 @@ body.dark .character-img-placeholder {
 .modal {
     position: fixed;
     inset: 0;
+    z-index: 2000;
     background: rgba(0,0,0,0.4);
     backdrop-filter: blur(4px);
     display: flex;
@@ -242,6 +243,7 @@ body.dark .character-img-placeholder {
     width: 380px;
     border-radius: 14px;
     position: relative;
+    z-index: 2001;
     text-align: center;
 }
 
@@ -1130,7 +1132,7 @@ body.dark .podium-cnname {
     display: none;
 }
 
-.results-board-panel {
+.results-page .results-board-panel {
     position: static;
     left: auto;
     transform: none;
@@ -1524,7 +1526,7 @@ body.dark .bracket-slot-votes {
         padding: 0 4px;
     }
 
-    .results-board-panel {
+    .results-page .results-board-panel {
         padding: 22px 10px 24px;
     }
 
@@ -1584,7 +1586,7 @@ body.dark .rules-body h3 {
         overflow: hidden;
     }
 
-    .results-board-panel {
+    .results-page .results-board-panel {
         position: static;
         left: auto;
         transform: none;
